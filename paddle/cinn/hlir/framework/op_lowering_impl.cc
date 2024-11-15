@@ -701,12 +701,11 @@ ir::Expr OpLowererImpl::DoGroupSchedule(
           vector_width--;
         }
       }
-      // get dtype of vectorized var
-      auto dtype = this->type_dict_.at(tensor_name);
-      VLOG(4) << tensor_name << " dtype " << dtype;
-      ir_sch.Vectorize(loop_inner, vector_width);
-      VLOG(4) << "After vectorize, ir is: \n"
-              << ir_sch.GetModule().GetExprs().at(0);
+      if (vector_width >= 16) {
+        ir_sch.Vectorize(loop_inner, vector_width);
+        VLOG(4) << "After vectorize, ir is: \n"
+                << ir_sch.GetModule().GetExprs().at(0);
+      }
     }
   }
 

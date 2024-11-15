@@ -609,12 +609,6 @@ Expr CasSimplifyMutator::SimplifySum(Expr u) {
 
   auto& operands = sum->operands();
 
-  auto temp = SimplifySpecificSum(u);
-  // If temp has been simplified, return it.
-  if (!temp.As<Sum>()) return temp;
-
-  operands = temp.As<Sum>()->operands();
-
   auto args = SimplifySumRec(operands);
   if (args.empty()) return make_const(u.type(), 0);
   if (args.size() == 1) return args[0];
@@ -679,6 +673,9 @@ std::vector<Expr> CasSimplifyMutator::MergeSum(const std::vector<Expr>& p,
 std::vector<Expr> CasSimplifyMutator::SimplifyBinarySum(Expr left, Expr right) {
   // SPRDREC-1
   if (!left.As<Sum>() && !right.As<Sum>()) {
+    auto res = SimplifySpecificSum(left, right);
+    if (res.size() == 1)
+      return {CasSimplify(res.front(), var_intervals)};
     auto a = left;
     auto b = right;
 
@@ -1453,21 +1450,61 @@ Expr CasSimplifyMutator::SimplifyCmp(Expr u) {
  * case 2: (m / n1) * n3 + (n2 * m) % n3 = n2 * m if n3 = n1 * n2 (m, n1, n2, n3's type
  * is int)
  * case 3: ((m % n1) / n2) * n2 + m % n2 = m % n1 if n1 % n2 = 0 (m, n1, n2's type is int)
+ * case 4: (m / n1) * n2 + (m % n1) / n3 = m / n3 if n1 = n2 * n3
+ * case 5: ((m % n1) / n2) * n3 + (m % n2) / n4 = (m % n1) / n4 if n2 = n3 * n4 and n1 % n2 = 0
  */
-Expr CasSimplifyMutator::SimplifySpecificSum(Expr tmp) {
-  auto sum = tmp.As<Sum>();
-  if (!sum) {
-    return tmp;
-  }
-  if (sum->operands().size() == 1U) return sum->operand(0);
-  Expr left = sum->operand(0);
-  Expr right = sum->operand(1);
+std::vector<Expr> CasSimplifyMutator::SimplifySpecificSum(Expr left, Expr right) {
+  VLOG(4) << "SimplifySpecificSum left: " << left << " right: " << right;
   auto left_mod = left.As<Mod>();
   auto right_mod = right.As<Mod>();
   auto left_mul = left.As<Product>();
   auto right_mul = right.As<Product>();
   auto left_div = left.As<FracOp>();
   auto right_div = right.As<FracOp>();
+  // normalize to left mul and right div
+  if (left_div && right_mul) {
+    left_mul = right_mul;
+    right_div = left_div;
+  }
+  if (left_mul && right_div) {
+    // case 4: ((m % n1) / n2) * n3 + (m % n2) / n4 = (m % n1) / n4 if 
+    // n2 = n3 * n4 and n1 % n2 = 0
+    auto mul_left = left_mul->operand(0);
+    auto mul_right = left_mul->operand(1);  // n3
+    auto div_left = right_div->operand(0);
+    auto div_right = right_div->operand(1); // n4
+    if (!mul_left->type().is_integer() || !mul_right->type().is_integer() ||
+        !div_left->type().is_integer() || !div_right->type().is_integer()) {
+      return {};
+    }
+    auto mul_left_div = mul_left.As<FracOp>();
+    auto div_left_mod = div_left.As<Mod>();
+    if (!mul_left_div || !div_left_mod) {
+      return {};
+    }
+    auto mul_left_div_left = mul_left_div->operand(0);  // m % n1 or m
+    auto mul_left_div_right = mul_left_div->operand(1); // n2
+    auto div_left_mod_left = div_left_mod->operand(0);  // m
+    auto div_left_mod_right = div_left_mod->operand(1); // n2
+    if (!MathEqual(mul_left_div_right, div_left_mod_right) ||
+        !MathEqual(mul_left_div_right, mul_right * div_right)) {
+      return {};
+    }
+    auto mul_left_div_left_mod = mul_left_div_left.As<Mod>();
+    if (mul_left_div_left_mod) {
+      auto mul_left_div_left_mod_left = mul_left_div_left_mod->operand(0);  // m
+      auto mul_left_div_left_mod_right = mul_left_div_left_mod->operand(1); // n1
+      if (!MathEqual(mul_left_div_left_mod_left, div_left_mod_left) ||
+        !is_zero(mul_left_div_left_mod_right % mul_left_div_right)) {
+        return {};
+      }
+    } else if (!MathEqual(div_left_mod_left, mul_left_div_left)) {
+      return {};
+    }
+    auto result = mul_left_div_left / div_right;
+    VLOG(4) << "SimplifySpecificSum result: " << result;
+    return {result};
+  }
   // normalize to left mul and right mod
   if (right_mul && left_mod) {
     left_mul = right_mul;
@@ -1479,13 +1516,13 @@ Expr CasSimplifyMutator::SimplifySpecificSum(Expr tmp) {
     right_mod = left_mod;
   }
   if (!right_mod || (!left_mul && !left_div)) {
-    return tmp;
+    return {};
   }
   CHECK_GE(right_mod->operands().size(), 2U);
   Expr mod_left = right_mod->operand(0);
   Expr mod_right = right_mod->operand(1);
   if (!mod_left->type().is_integer() || !mod_right->type().is_integer()) {
-    return tmp;
+    return {};
   }
   if (left_mul) {
     // case 1: (m / n) * n + m % n = m (m, n's type is int)
@@ -1493,7 +1530,6 @@ Expr CasSimplifyMutator::SimplifySpecificSum(Expr tmp) {
     // n2, n3's type is int)
     // case 3: ((m % n1) / n2) * n2 + m % n2 = m % n1 if n1 % n2 = 0 (m, n1, 
     // n2's type is int)
-    VLOG(4) << "SimplefySpecificSum. left: " << left << " right: " << right;
     CHECK_GE(left_mul->operands().size(), 2U);
     Expr mul_left = left_mul->operand(0);
     Expr mul_right = left_mul->operand(1);
@@ -1505,24 +1541,20 @@ Expr CasSimplifyMutator::SimplifySpecificSum(Expr tmp) {
       mul_left = left_mul->operand(1);
       mul_right = left_mul->operand(0);
     } else if (!MathEqual(mod_right, mul_right)) {
-      return tmp;
+      return {};
     }
     auto div = mul_left.As<FracOp>();
     if (!div) {
-      return tmp;
+      return {};
     }
     CHECK_GE(div->operands().size(), 2U);
     Expr div_left = div->operand(0);
     Expr div_right = div->operand(1);
     if (!div_left->type().is_integer() || !div_right->type().is_integer()) {
-      return tmp;
+      return {};
     }
     if (MathEqual(div_left * mod_right, mod_left * div_right)) {
-      tmp = mod_left;
-      for (int i = 2; i < sum->operands().size(); i++) {
-        tmp = tmp + sum->operand(i);
-      }
-      return tmp;
+      return {mod_left};
     } else {
       // handle the case 3: ((m % n1) / n2) * n2 + m % n2 = m % n1 if n1 % n2 = 0 
       // (m, n1, n2's type is int)
@@ -1532,16 +1564,14 @@ Expr CasSimplifyMutator::SimplifySpecificSum(Expr tmp) {
         auto div_left_mod_right = div_left_mod->operand(1);
         if (MathEqual(div_left_mod_left, mod_left) &&
             is_zero(div_left_mod_right % mod_right)) {
-          tmp = div_left;
-          for (int i = 2; i < sum->operands().size(); i++) {
-            tmp = tmp + sum->operand(i);
-          }
-          VLOG(4) << "SimplefySpecificSum. result: " << tmp;
+          auto result = div_left;
+          VLOG(4) << "SimplifySpecificSum. result: " << result;
+          return {result};
         }
       }
     }
   }
-  return tmp;
+  return {};
 }
 
 Expr CasSimplifyMutator::operator()(Expr u) {
@@ -1565,13 +1595,7 @@ Expr CasSimplifyMutator::operator()(Expr u) {
   }
 
   if (u.As<Sum>()) {
-    auto tmp = detail::SumOrProductGetSingleElementsRec(SimplifySum(u));
-    // deal with index's div-mod add simplification, temporary solution, not
-    // cover all situations. case 1: (m / n) * n + m % n = m (m, n's type is
-    // int) case 2: (m / n1) * n3 + (n2 * m) % n3 = n2 * m if n3 = n1 * n2 (m,
-    // n1, n2, n3's type is int) case 3: m / n2 + (n1 * m) % n3 = n1 * m if n3 =
-    // n1 * n2 (m, n1, n2, n3's type is int)
-    return SimplifySpecificSum(tmp);
+    return detail::SumOrProductGetSingleElementsRec(SimplifySum(u));
   }
 
   if (u.As<Mod>()) {

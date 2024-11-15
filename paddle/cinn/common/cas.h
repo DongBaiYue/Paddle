@@ -176,7 +176,6 @@ struct CasSimplifyMutator {
                     Expr min,
                     bool unfold_const_bound = true);
   bool SimplifySpecificSumMod(Expr* u, Expr a, Expr b);
-  Expr SimplifySpecificSum(Expr u);
 
  private:
   std::vector<Expr> SimplifyBinaryProduct(Expr left, Expr right);
@@ -190,6 +189,7 @@ struct CasSimplifyMutator {
       const std::vector<Expr>& p,
       const std::vector<Expr>& q,
       const std::function<std::vector<Expr>(Expr, Expr)>& binary_merge);
+  std::vector<Expr> SimplifySpecificSum(Expr left, Expr right);
 
   const absl::flat_hash_map<std::string, CasInterval> var_intervals;
 

@@ -359,6 +359,22 @@ inline DataVec<T, Num> cinn_sycl_select(const DataVec<bool, Num> &condition, con
   return res;
 }
 
+template <typename T, size_t Num>
+inline DataVec<T, Num> cinn_sycl_select(const DataVec<bool, Num> &condition, T true_val,
+                                        const DataVec<T, Num> &false_val) {
+  DataVec<T, Num> res;
+  sycl::ext::mlu::vector_select(res.data_, condition.data_, true_val, false_val.data_, Num);
+  return res;
+}
+
+template <typename T, size_t Num>
+inline DataVec<T, Num> cinn_sycl_select(const DataVec<bool, Num> &condition, const DataVec<T, Num> &true_val,
+                                        T false_val) {
+  DataVec<T, Num> res;
+  sycl::ext::mlu::vector_select(res.data_, condition.data_, true_val.data_, false_val, Num);
+  return res;
+}
+
 #define DEF_FN_FP32_VEC_UNARY(func)                                                \
 template <size_t Num>                                                              \
 inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(DataVec<float, Num> &&x) {    \
@@ -410,8 +426,11 @@ inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(float x,                   
 
 DEF_FN_FP32_VEC_UNARY(abs)
 DEF_FN_FP32_VEC_UNARY(acos)
+DEF_FN_FP32_VEC_UNARY(acosh)
 DEF_FN_FP32_VEC_UNARY(asin)
+DEF_FN_FP32_VEC_UNARY(asinh)
 DEF_FN_FP32_VEC_UNARY(atan)
+DEF_FN_FP32_VEC_UNARY(atanh)
 DEF_FN_FP32_VEC_UNARY(ceil)
 DEF_FN_FP32_VEC_UNARY(cos)
 DEF_FN_FP32_VEC_UNARY(cosh)
@@ -419,6 +438,7 @@ DEF_FN_FP32_VEC_UNARY(erf)
 DEF_FN_FP32_VEC_UNARY(exp)
 DEF_FN_FP32_VEC_UNARY(floor)
 DEF_FN_FP32_VEC_UNARY(log)
+DEF_FN_FP32_VEC_UNARY(neg)
 DEF_FN_FP32_VEC_UNARY(round)
 DEF_FN_FP32_VEC_UNARY(rsqrt)
 DEF_FN_FP32_VEC_UNARY(sign)
@@ -431,7 +451,14 @@ DEF_FN_FP32_VEC_UNARY(trunc)
 
 // DEF_FN_FP32_VEC_SCALAR_BINARY(max)
 // DEF_FN_FP32_VEC_SCALAR_BINARY(min)
+DEF_FN_FP32_VEC_BINARY(add)
+DEF_FN_FP32_VEC_BINARY(sub)
+DEF_FN_FP32_VEC_BINARY(mul)
+DEF_FN_FP32_VEC_BINARY(div)
+DEF_FN_FP32_VEC_BINARY(eq)
+DEF_FN_FP32_VEC_BINARY(ne)
 DEF_FN_FP32_VEC_BINARY(pow)
+DEF_FN_FP32_VEC_BINARY(mod)
 #undef DEF_FN_FP32_VEC_UNARY
 #undef DEF_FN_FP32_VEC_BINARY
 #undef DEF_FN_FP32_VEC_SCALAR_BINARY

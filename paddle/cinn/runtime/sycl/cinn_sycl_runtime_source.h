@@ -256,19 +256,19 @@ struct DataVec {
   }
 
 #define DEF_CMP_OP(op, func)                                                          \
-  inline DataVec<bool, Num> operator op(const self_type& other) && {               \
-    DataVec<bool, Num> res(data_);                                                 \
-    sycl::ext::mlu::vector_##func(res.data_, data_, other.data_, Num);        \
+  inline DataVec<bool, Num> operator op(const self_type& other) const {               \
+    DataVec<bool, Num> res;                                                           \
+    sycl::ext::mlu::vector_##func(res.data_, data_, other.data_, Num);                \
     return res;                                                                       \
   }                                                                                   \
-  inline DataVec<bool, Num> operator op(value_type val) && {                       \
-    DataVec<bool, Num> res(data_);                                                 \
-    sycl::ext::mlu::vector_##func(res.data_, data_, val, Num);                \
+  inline DataVec<bool, Num> operator op(value_type val) const {                       \
+    DataVec<bool, Num> res;                                                           \
+    sycl::ext::mlu::vector_##func(res.data_, data_, val, Num);                        \
     return res;                                                                       \
   }                                                                                   \
-  inline friend DataVec<bool, Num> operator op(value_type val, self_type&& vec) {  \
-    DataVec<bool, Num> res(vec.data_);                                             \
-    sycl::ext::mlu::vector_##func(res.data_, val, vec.data_, Num);            \
+  inline friend DataVec<bool, Num> operator op(value_type val, const self_type& vec) {\
+    DataVec<bool, Num> res;                                                           \
+    sycl::ext::mlu::vector_##func(res.data_, val, vec.data_, Num);                    \
     return res;                                                                       \
   }
 
@@ -331,19 +331,27 @@ DataVec<float, Num> IndexVecWithMod<Num>::operator<(int val) const {
 
 // *************************************************************** //
 // memory load and store
-template <typename T>
-inline void cinn_sycl_store(T *addr, int32_t offset, T val) {
-  addr[offset] = val;
+template <typename T1, typename T2>
+inline void cinn_sycl_store(T1 *addr, int32_t offset, T2 val) {
+  addr[offset] = static_cast<T1>(val);
 }
 
-template <typename T, size_t Num>
-inline void cinn_sycl_store(T *addr, const IndexVec<Num> &offset, T val) {
-  sycl::ext::mlu::memset_global(addr + offset.base, val, Num);
+template <typename T1, typename T2, size_t Num>
+inline void cinn_sycl_store(T1 *addr, const IndexVec<Num> &offset, T2 val) {
+  sycl::ext::mlu::memset_global(addr + offset.base, static_cast<T1>(val), Num);
 }
 
-template <typename T, size_t Num>
-inline void cinn_sycl_store(T *addr, const IndexVec<Num> &offset, const DataVec<T, Num> &val) {
-  sycl::ext::mlu::memcpy_nram2gdram(addr + offset.base, val.data_, Num);
+template <typename T1, typename T2, size_t Num>
+inline void cinn_sycl_store(T1 *addr, const IndexVec<Num> &offset, const DataVec<T2, Num> &val) {
+  static_assert(sizeof(T1) == sizeof(T2), "Data type mismatch");
+  sycl::ext::mlu::memcpy_nram2gdram(addr + offset.base, (const T1 *)val.data_, Num);
+}
+
+template <typename T1, typename T2, size_t Num>
+inline DataVec<T1, Num> cinn_sycl_cast(const DataVec<T2, Num> &src) {
+  DataVec<T1, Num> res;
+  sycl::ext::mlu::vector_cast(res.data_, src.data_, Num);
+  return res;
 }
 
 template <typename T>

@@ -763,6 +763,9 @@ struct VectorizeLoops_ : public IRMutator<Expr *> {
       node->extent = for_extent;
       auto *extent_min = for_extent.As<Min>();
       auto *extent_max = for_extent.As<Max>();
+      Expr for_body = cinn::common::AutoSimplify(node->body, var_intervals);
+      Simplify(&for_body);
+      node->body = for_body;
 
       vectorizable_ = true;
       IRMutator<>::Visit(&node->body, &node->body);

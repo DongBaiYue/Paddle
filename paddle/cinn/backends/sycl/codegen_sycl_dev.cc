@@ -309,7 +309,7 @@ void CodeGenSYCL_Dev::PrintTempBufferCreation(const ir::Buffer &buffer) {
     case ir::MemoryType::GPUShared: {
       str_ += "auto ";
       str_ += buffer->name;
-      str_ += " = *sycl::ext::oneapi::group_local_memory<";
+      str_ += " = *sycl::group_local_memory<";
       str_ += GetTypeRepr(buffer->dtype);
       str_ += "[ ";
       Expr buffer_size(1);
@@ -549,8 +549,13 @@ void CodeGenSYCL_Dev::Visit(const ir::Cast *op) {
   if (op->v().type().is_vector()) {
     if (op->v().type().is_bool()) {
       IrPrinter::Visit(op->v());
-    } else
-      CINN_RUNTIME_NOT_IMPLEMENTED
+    } else {
+      str_ += "cinn_sycl_cast<";
+      str_ += GetTypeRepr(op->type());
+      str_ += ">(";
+      IrPrinter::Visit(op->v());
+      str_ += ")";
+    }
   } else {
     CodeGenC::Visit(op);
   }

@@ -137,6 +137,7 @@ struct CasSimplifyMutator {
   Expr SimplifyProduct(Expr a);
   Expr SimplifyMinAndMax(Expr a);
   Expr SimplifyCmp(Expr a);
+  Expr SimplifySelect(Expr a);
   std::vector<Expr> SimplifyProductRec(const std::vector<Expr>& operands);
   std::vector<Expr> SimplifySumRec(const std::vector<Expr>& operands);
   Expr SimplifyMod(Expr u);

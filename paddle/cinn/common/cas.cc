@@ -1444,6 +1444,20 @@ Expr CasSimplifyMutator::SimplifyCmp(Expr u) {
   return u;
 }
 
+Expr CasSimplifyMutator::SimplifySelect(Expr u) {
+  auto select = u.As<Select>();
+  CHECK(select);
+  Expr condition = this->operator()(select->condition);
+  Expr true_value = this->operator()(select->true_value);
+  Expr false_value = this->operator()(select->false_value);
+
+  if (condition.is_constant()) {
+    return condition.get_constant() ? true_value : false_value;
+  }
+
+  return Select::Make(condition, true_value, false_value);
+}
+
 /**
  * deal with index's div-mod add simplification, temporary solution, not cover
  * all situations. case 1: (m / n) * n + m % n = m (m, n's type is int) 
@@ -1604,6 +1618,10 @@ Expr CasSimplifyMutator::operator()(Expr u) {
 
   if (u.is_cmp()) {
     return SimplifyCmp(u);
+  }
+
+  if (u.As<Select>()) {
+    return SimplifySelect(u);
   }
 
   switch (u.node_type()) {

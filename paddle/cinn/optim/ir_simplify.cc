@@ -66,6 +66,7 @@ struct SimplifyNoPureMathMutator : public ir::IRMutator<ir::Expr*> {
 
 #define __(op__)                                    \
   void Visit(const op__* op, Expr* expr) override { \
+    ir::IRMutator<ir::Expr*>::Visit(op, expr);      \
     PartialSimplify(expr, var_intervals);           \
   }
 
@@ -75,6 +76,16 @@ struct SimplifyNoPureMathMutator : public ir::IRMutator<ir::Expr*> {
   __(Div)
   __(Min)
   __(Max)
+  __(Select)
+  __(And)
+  __(Or)
+  __(Not)
+  __(LE)
+  __(LT)
+  __(GE)
+  __(GT)
+  __(EQ)
+  __(NE)
 #undef __
 
   void Visit(const PolyFor* op, Expr* expr) override {

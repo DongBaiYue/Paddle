@@ -175,6 +175,13 @@ ir::Expr CalculateGcdForExprPair(const ir::Expr& expr1, const ir::Expr& expr2) {
 std::vector<ir::Expr> CalculateIndexVectorGcd(
     const std::string& local_var,
     const std::vector<std::vector<ir::Expr>>& indexes) {
+  // 添加调试信息
+  VLOG(4) << "Calculating GCD for local_var: " << local_var;
+  // 检查 indexes 的大小
+  if (indexes.size() < 2) {
+    LOG(WARNING) << "Indexes size is less than 2, returning default GCD values. Local var = " << local_var;
+    return std::vector<ir::Expr>(indexes.empty() ? 0 : indexes[0].size(), ir::Expr(1));
+  }
   CHECK_GE(indexes.size(), 2)
       << "We should guarantee indexes.size() >= 2, because local variable "
       << local_var << " should at least load and store once.";

@@ -67,7 +67,7 @@ Expr logic_or(const std::vector<Expr>& conds) {
   }
 
 EXTERN_CALL_IMP(Exp, exp);
-EXTERN_CALL_IMP_NO_VEC(Erf, erf);
+EXTERN_CALL_IMP(Erf, erf);
 EXTERN_CALL_IMP(Sqrt, sqrt);
 EXTERN_CALL_IMP(Rsqrt, rsqrt);
 EXTERN_CALL_IMP(Log, log);
@@ -83,12 +83,12 @@ EXTERN_CALL_IMP(Cosh, cosh);
 EXTERN_CALL_IMP(Tan, tan);
 EXTERN_CALL_IMP(Tanh, tanh);
 EXTERN_CALL_IMP(Sinh, sinh);
-EXTERN_CALL_IMP_NO_VEC(Acos, acos);
-EXTERN_CALL_IMP_NO_VEC(Acosh, acosh);
-EXTERN_CALL_IMP_NO_VEC(Asin, asin);
-EXTERN_CALL_IMP_NO_VEC(Asinh, asinh);
-EXTERN_CALL_IMP_NO_VEC(Atan, atan);
-EXTERN_CALL_IMP_NO_VEC(Atanh, atanh);
+EXTERN_CALL_IMP(Acos, acos);
+EXTERN_CALL_IMP(Acosh, acosh);
+EXTERN_CALL_IMP(Asin, asin);
+EXTERN_CALL_IMP(Asinh, asinh);
+EXTERN_CALL_IMP(Atan, atan);
+EXTERN_CALL_IMP(Atanh, atanh);
 EXTERN_CALL_IMP(Cbrt, cbrt);
 EXTERN_CALL_IMP(Clz, clz);
 EXTERN_CALL_IMP(Popc, popc);

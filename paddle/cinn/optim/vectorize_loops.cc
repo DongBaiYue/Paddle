@@ -747,6 +747,7 @@ struct VectorizeLoops_ : public IRMutator<Expr *> {
     }
     // the extent the forloops marked as Vectorized should be int constant
     if (forloop->is_vectorized()) {
+      VLOG(4) << "Vectorizing for loop: " << *expr;
       Context::info_rgt().Get<int>("vectorized_forloop_count")++;
 
       PADDLE_ENFORCE_GT(
@@ -770,17 +771,18 @@ struct VectorizeLoops_ : public IRMutator<Expr *> {
       vectorizable_ = true;
       IRMutator<>::Visit(&node->body, &node->body);
 
-      if (target.arch_is_gpu()) {
+      if (target.arch_is_gpu() || target.arch_is_mlu()) {
         if (!forloop->extent.As<IntImm>() ||
             forloop->extent.as_int32() % forloop->vectorize_info().factor !=
                 0) {
           vectorizable_ = false;
-          VLOG(5)
+          VLOG(4)
               << "GPU vectorize only support extent is a multiple of factor";
         }
       }
 
       if (extent_min || extent_max || !vectorizable_) {
+        VLOG(4) << "Not vectorizing loop with tail blocks";
         // not vectorize if has tail blocks, for llvm to optimize
         node->reset_vectorize_info();
         var_intervals.erase(forloop->loop_var->name);
@@ -790,6 +792,7 @@ struct VectorizeLoops_ : public IRMutator<Expr *> {
       const int factor = forloop->vectorize_info().factor;
       auto _new_forloop = SplitForLoop(node, factor);
       if (!_new_forloop.defined()) {
+        VLOG(4) << "Not vectorizing loop that is not splittable";
         IRMutator<>::Visit(&node->body, &node->body);
         var_intervals.erase(forloop->loop_var->name);
         return;
@@ -805,6 +808,7 @@ struct VectorizeLoops_ : public IRMutator<Expr *> {
       auto *extent_int = new_forloop->extent.As<IntImm>();
 
       if (!extent_int) {
+        VLOG(4) << "Not vectorizing loop with extent: " << new_forloop->extent;
         IRMutator<>::Visit(&node->body, &node->body);
         var_intervals.erase(forloop->loop_var->name);
         return;

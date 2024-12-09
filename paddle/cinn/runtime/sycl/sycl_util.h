@@ -54,6 +54,47 @@ void cinn_call_sycl_memcpy(void *v_args,
                            int num_args,
                            size_t count);
 
+#ifdef CINN_WITH_CNNL
+#include <cnrt.h>
+#include <cnnl.h>
+
+#define CNRT_CALL(func)                                     \
+  {                                                         \
+    auto status = func;                                     \
+    if (status != cnrtSuccess) {                            \
+      std::stringstream ss;                                 \
+      ss << "CNRT Error : " << cnrtGetErrorStr(status);     \
+      PADDLE_THROW(phi::errors::Fatal(ss.str()));           \
+    }                                                       \
+  }
+
+#define CNNL_CALL(func)                                     \
+  {                                                         \
+    auto status = func;                                     \
+    if (status != CNNL_STATUS_SUCCESS) {                    \
+      std::stringstream ss;                                 \
+      ss << "CNNL Error : " << cnnlGetErrorString(status);  \
+      PADDLE_THROW(phi::errors::Fatal(ss.str()));           \
+    }                                                       \
+  }
+
+void cinn_call_cnnl_gaussian_random(void* v_args,
+                               int num_args,
+                               float mean,
+                               float std,
+                               int seed);
+
+void cinn_call_cnnl_uniform_random(void* v_args,
+                              int num_args,
+                              float min,
+                              float max,
+                              int seed);
+
+void cinn_call_cnnl_randint(void* v_args,
+                       int num_args,
+                       int seed);
+#endif // CINN_WITH_CNNL
+
 #ifdef CINN_WITH_DNNL
 #define DNNL_STATUS_TO_STRING(status) \
     ((status) == dnnl_success           ? "dnnl_success" : \

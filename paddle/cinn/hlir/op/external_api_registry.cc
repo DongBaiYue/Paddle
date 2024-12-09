@@ -110,18 +110,18 @@ CINN_REGISTER_HELPER(op_external_api) {
       .set_api_name("cinn_call_cudnn_pool2d_backward");
 #endif
 
+#if defined(CINN_WITH_SYCL) && defined(CINN_WITH_CNNL)
+  const auto& sycl_mlu = ::cinn::common::SYCLTarget(::cinn::common::Target::Arch::CambriconMLU);
+  CINN_OP_REGISTER_EXTERNAL_API(gaussian_random, sycl_mlu)
+      .set_api_name("cinn_call_cnnl_gaussian_random");
+  CINN_OP_REGISTER_EXTERNAL_API(uniform_random, sycl_mlu)
+      .set_api_name("cinn_call_cnnl_uniform_random");
+  CINN_OP_REGISTER_EXTERNAL_API(randint, sycl_mlu)
+      .set_api_name("cinn_call_cnnl_randint");
+#endif
+
 #if defined(CINN_WITH_SYCL) && defined(CINN_WITH_DNNL)
   const auto& sycl_dev = ::cinn::common::SYCLTarget();
-  CINN_OP_REGISTER_EXTERNAL_API(gaussian_random, sycl_dev)
-      .set_api_name("cinn_call_onednn_gaussian_random");
-  CINN_OP_REGISTER_EXTERNAL_API(uniform_random, sycl_dev)
-      .set_api_name("cinn_call_onednn_uniform_random");
-  CINN_OP_REGISTER_EXTERNAL_API(randint, sycl_dev)
-      .set_api_name("cinn_call_onednn_randint");
-  CINN_OP_REGISTER_EXTERNAL_API(cholesky, sycl_dev)
-      .set_api_name("cinn_call_onednn_cholesky");
-  CINN_OP_REGISTER_EXTERNAL_API(triangular_solve, sycl_dev)
-      .set_api_name("cinn_call_onednn_triangular_solve");
   CINN_OP_REGISTER_EXTERNAL_API(matmul, sycl_dev)
       .set_api_name("cinn_call_onednn_matmul");
   CINN_OP_REGISTER_EXTERNAL_API(mul, sycl_dev)

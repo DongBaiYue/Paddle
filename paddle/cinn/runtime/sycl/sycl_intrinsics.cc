@@ -466,64 +466,40 @@ CINN_REGISTER_HELPER(cinn_sycl_host_api) {
       .AddInputType<size_t>()  // count
       .End();
 
+#ifdef CINN_WITH_CNNL
+  using cinn::runtime::sycl::cinn_call_cnnl_gaussian_random;
+  REGISTER_EXTERN_FUNC_HELPER(cinn_call_cnnl_gaussian_random,
+                              cinn::common::DefaultHostTarget())
+      .SetRetType<void>()
+      .AddInputType<void *>()  // v_args
+      .AddInputType<int>()     // num_args
+      .AddInputType<float>()   // mean
+      .AddInputType<float>()   // std
+      .AddInputType<int>()     // seed
+      .End();
+
+  using cinn::runtime::sycl::cinn_call_cnnl_uniform_random;
+  REGISTER_EXTERN_FUNC_HELPER(cinn_call_cnnl_uniform_random,
+                              cinn::common::DefaultHostTarget())
+      .SetRetType<void>()
+      .AddInputType<void *>()  // v_args
+      .AddInputType<int>()     // num_args
+      .AddInputType<float>()   // min
+      .AddInputType<float>()   // max
+      .AddInputType<int>()     // seed
+      .End();
+
+  using cinn::runtime::sycl::cinn_call_cnnl_randint;
+  REGISTER_EXTERN_FUNC_HELPER(cinn_call_cnnl_randint,
+                              cinn::common::DefaultHostTarget())
+      .SetRetType<void>()
+      .AddInputType<void *>()  // v_args
+      .AddInputType<int>()     // num_args
+      .AddInputType<int>()     // seed
+      .End();
+#endif
+
 #ifdef CINN_WITH_DNNL
-  // using cinn::runtime::sycl::cinn_call_onednn_gaussian_random;
-  // REGISTER_EXTERN_FUNC_HELPER(cinn_call_onednn_gaussian_random,
-  //                             cinn::common::DefaultHostTarget())
-  //     .SetRetType<void>()
-  //     .AddInputType<void *>()  // v_args
-  //     .AddInputType<int>()     // num_args
-  //     .AddInputType<float>()   // mean
-  //     .AddInputType<float>()   // std
-  //     .AddInputType<int>()     // seed
-  //     .End();
-
-  // using cinn::runtime::sycl::cinn_call_onednn_uniform_random;
-  // REGISTER_EXTERN_FUNC_HELPER(cinn_call_onednn_uniform_random,
-  //                             cinn::common::DefaultHostTarget())
-  //     .SetRetType<void>()
-  //     .AddInputType<void *>()  // v_args
-  //     .AddInputType<int>()     // num_args
-  //     .AddInputType<float>()   // min
-  //     .AddInputType<float>()   // max
-  //     .AddInputType<int>()     // seed
-  //     .End();
-
-  // using cinn::runtime::sycl::cinn_call_onednn_randint;
-  // REGISTER_EXTERN_FUNC_HELPER(cinn_call_onednn_randint,
-  //                             cinn::common::DefaultHostTarget())
-  //     .SetRetType<void>()
-  //     .AddInputType<void *>()  // v_args
-  //     .AddInputType<int>()     // num_args
-  //     .AddInputType<int>()     // seed
-  //     .End();
-
-  // using cinn::runtime::sycl::cinn_call_onednn_cholesky;
-  // REGISTER_EXTERN_FUNC_HELPER(cinn_call_onednn_cholesky,
-  //                             cinn::common::DefaultHostTarget())
-  //     .SetRetType<void>()
-  //     .AddInputType<void *>()  // v_args
-  //     .AddInputType<int>()     // num_args
-  //     .AddInputType<int>()     // batch_size
-  //     .AddInputType<int>()     // m
-  //     .AddInputType<bool>()    // upper
-  //     .End();
-
-  // using cinn::runtime::sycl::cinn_call_onednn_triangular_solve;
-  // REGISTER_EXTERN_FUNC_HELPER(cinn_call_onednn_triangular_solve,
-  //                             cinn::common::DefaultHostTarget())
-  //     .SetRetType<void>()
-  //     .AddInputType<void *>()  // v_args
-  //     .AddInputType<int>()     // num_args
-  //     .AddInputType<int>()     // batch_size
-  //     .AddInputType<int>()     // m
-  //     .AddInputType<int>()     // k
-  //     .AddInputType<bool>()    // left_side
-  //     .AddInputType<bool>()    // upper
-  //     .AddInputType<bool>()    // transpose_a
-  //     .AddInputType<bool>()    // unit_diagonal
-  //     .End();
-
   using cinn::runtime::sycl::cinn_call_onednn_matmul;
   REGISTER_EXTERN_FUNC_HELPER(cinn_call_onednn_matmul,
                               cinn::common::DefaultHostTarget())

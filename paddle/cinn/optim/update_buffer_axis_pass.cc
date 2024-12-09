@@ -84,7 +84,7 @@ class AnalyzeBufferAxis : public ir::IRMutator<> {
       ir::IRMutator<>::Visit(op, expr);
       return;
     }
-    FormalizeSingleIndex(tensor, &(store->indices));
+    // FormalizeSingleIndex(tensor, &(store->indices));
     AnalyzeTensorAxis(store->indices, tensor);
     ir::IRMutator<>::Visit(op, expr);
   }
@@ -98,7 +98,7 @@ class AnalyzeBufferAxis : public ir::IRMutator<> {
       ir::IRMutator<>::Visit(op, expr);
       return;
     }
-    FormalizeSingleIndex(tensor, &(load->indices));
+    // FormalizeSingleIndex(tensor, &(load->indices));
     AnalyzeTensorAxis(load->indices, tensor);
     ir::IRMutator<>::Visit(op, expr);
   }

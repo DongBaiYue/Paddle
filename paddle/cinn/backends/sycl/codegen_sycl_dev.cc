@@ -34,7 +34,6 @@ const std::string &CodeGenSYCL_Dev::GetSourceHeader() {
   static std::string source_header =
       R"(#include <sycl/sycl.hpp>
 #include "cinn_sycl_runtime_source.h"
-typedef sycl::half float16;
 )";
   return source_header;
 }
@@ -90,7 +89,7 @@ std::vector<Expr> CodeGenSYCL_Dev::GenerateBufferAliasExprs(
 
 void CodeGenSYCL_Dev::Visit(const ir::_LoweredFunc_ *op) {
   // clear names valid within scope when enter a new function
-  vectorized_tensor_names_.clear();
+  local_var_names_.clear();
 
   // Print the packed function
   str_ += "// CodeGenSYCL: NOTE: Auto-generated packed function\n";
@@ -285,6 +284,8 @@ std::string CodeGenSYCL_Dev::Compile(const ir::Module &module,
 void CodeGenSYCL_Dev::PrintIncludes() { str_ += GetSourceHeader(); }
 
 void CodeGenSYCL_Dev::PrintTempBufferCreation(const ir::Buffer &buffer) {
+  VLOG(3) << "PrintTempBufferCreation: " << buffer->name;
+  VLOG(3) << "buffer->memory_type: " << buffer->memory_type;
   PADDLE_ENFORCE_NE(buffer->type(),
                     Void(),
                     ::common::errors::InvalidArgument(
@@ -322,9 +323,9 @@ void CodeGenSYCL_Dev::PrintTempBufferCreation(const ir::Buffer &buffer) {
       break;
     }
 
-    case ir::MemoryType::GPULocal:
-      print_gpu_memory("");
+    case ir::MemoryType::GPULocal: {
       break;
+    }
 
     default:
       PADDLE_THROW(::common::errors::Fatal(
@@ -391,102 +392,42 @@ void CodeGenSYCL_Dev::Visit(const ir::Call *op) {
 }
 
 void CodeGenSYCL_Dev::Visit(const ir::Let *op) {
+  VLOG(3) << "CodeGenSYCL visiting let op: " << op->symbol;
   PADDLE_ENFORCE_EQ(
       op->type().valid(),
       true,
       ::common::errors::InvalidArgument(
           "ir::Let's op type cannot be valid in CodeGenSYCL_Dev"));
 
-  // identify vectorized tensors by checking their dtypes are customized_type
-  // with customized_type::kcuda_builtin_vector_t prefix, and save their names
-  if (op->type().is_customized() &&
-      utils::StartsWith(op->type().customized_type(),
-                        common::customized_type::kcuda_builtin_vector_t)) {
-    str_ += GetTypeRepr(op->type());
-    if (op->type().is_cpp_handle()) {
-      str_ += " ";
-      // str_ += kCKeywordRestrict;
-    }
-    str_ += " ";
-    IrPrinter::Visit(op->symbol);
-    vectorized_tensor_names_.insert(utils::GetStreamCnt(op->symbol));
-    // skip "=0" in "half8 temp = 0;" sincethe operator= of half8 may not
-    // overloaded.
-    if (op->body.As<ir::IntImm>() && op->body.As<ir::IntImm>()->value == 0) {
-      return;
-    }
-    str_ += " = ";
-    IrPrinter::Visit(op->body);
-  } else {
-    CodeGenC::Visit(op);
-  }
-}
-
-bool CodeGenSYCL_Dev::PrintBuiltinVectorAccess(const ir::LoadStoreAddrMnger *op,
-                                               ir::Expr index_expr,
-                                               bool is_store) {
-  static constexpr char index2suffix[8] = {
-      'x', 'y', 'z', 'w', 'v', 'u', 't', 's'};
-
-  // addr of op should be a place of tensor and the index is simple int number
-  if (!op->is_addr_tensor() || !index_expr.As<ir::IntImm>()) {
-    return false;
-  }
-  auto *tensor = op->tensor.As<ir::_Tensor_>();
-  PADDLE_ENFORCE_NE(tensor,
-                    nullptr,
-                    ::common::errors::InvalidArgument(
-                        "Tensor in CodeGenSYCL_Dev::PrintBuiltinVectorAccess "
-                        "cannot be NULL."));
-
-  // identify vectorized tensors by their names
-  if (!vectorized_tensor_names_.count(tensor->name)) {
-    return false;
-  }
-
-  // the index can't exceed the range of cuda built-in vector type
-  int index = index_expr.As<ir::IntImm>()->value;
-  if (index < 0 || index >= 8) {
-    return false;
-  }
-  if (is_store && tensor->type().is_cpp_handle()) {
-    str_ += tensor->name;
-    str_ += "[";
-    str_ += std::to_string(index);
-    str_ += "]";
-  } else {
-    str_ += tensor->name;
-    str_ += (tensor->type().is_cpp_handle() ? "->" : ".");
-    str_ += index2suffix[index];
-  }
-  return true;
+  local_var_names_.insert(op->symbol.as_var()->name);
 }
 
 void CodeGenSYCL_Dev::Visit(const ir::Load *op) {
+  VLOG(3) << "CodeGenSYCL visiting load op: " << op->name();
   ir::Expr offset = [&] {
     if (load_to_offset_.count(op) == 0) {
       load_to_offset_[op] = op->index();
     }
     return load_to_offset_.at(op);
   }();
+  if (local_var_names_.count(op->tensor.As<ir::_Tensor_>()->name)) {
+    str_ += op->tensor.As<ir::_Tensor_>()->name;
+    return;
+  }
 
-  Expr dense_strided_ramp = detail::StridedRampBase(offset, 1);
-  if (dense_strided_ramp.defined()) {  // Loading a continuous Ramp address.
+  if (offset.type().is_vector()) {
     CHECK(op->type().is_vector());
+    Expr dense_strided_ramp = detail::StridedRampBase(offset, 1);
     PrintStackVecType(op->type().ElementOf(), offset.type().lanes());
     str_ += "::Load(";
     str_ += op->tensor.As<ir::_Tensor_>()->name;
     str_ += ", ";
-    IrPrinter::Visit(dense_strided_ramp);
-    str_ += ")";
-  } else if (offset.type().is_vector()) {
-    // gather
-    CHECK(op->type().is_vector());
-    PrintStackVecType(op->type().ElementOf(), offset.type().lanes());
-    str_ += "::Load(";
-    str_ += op->tensor.As<ir::_Tensor_>()->name;
-    str_ += ", ";
-    IrPrinter::Visit(offset);
+    if (dense_strided_ramp.defined()) {
+      // Loading a continuous Ramp address.
+      IrPrinter::Visit(dense_strided_ramp);
+    } else {
+      IrPrinter::Visit(offset);
+    }
     str_ += ")";
   } else if (op->is_addr_tensor()) {
     auto *tensor = op->tensor.As<ir::_Tensor_>();
@@ -495,7 +436,7 @@ void CodeGenSYCL_Dev::Visit(const ir::Load *op) {
     IrPrinter::Visit(offset);
     str_ += "]";
   } else {
-    IrPrinter::Visit(op);
+    CINN_RUNTIME_NOT_IMPLEMENTED
   }
 }
 
@@ -510,6 +451,13 @@ void CodeGenSYCL_Dev::Visit(const ir::Store *op) {
   }();
   auto *tensor = op->tensor.As<ir::_Tensor_>();
   CHECK(tensor);
+  if (local_var_names_.count(tensor->name)) {
+    str_ += "auto ";
+    str_ += tensor->name;
+    str_ += " = ";
+    IrPrinter::Visit(op->value);
+    return;
+  }
   str_ += "cinn_sycl_store(";
   str_ += tensor->name;
   str_ += ", ";

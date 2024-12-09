@@ -107,10 +107,8 @@ class CodeGenSYCL_Dev : public CodeGenC {
   std::string GenerateKernelName(const ir::_LoweredFunc_* op);
   Target target_;
   bool for_syclrtc_{false};
-  // names of vectorized tensors from `Let` statments where dtypes of the
-  // tensors are customized_type with customized_type::kcuda_builtin_vector_t
-  // prefix
-  std::unordered_set<std::string> vectorized_tensor_names_;
+  // names of tensors that are from local buffers.
+  std::unordered_set<std::string> local_var_names_;
 };
 
 }  // namespace backends

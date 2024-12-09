@@ -78,6 +78,19 @@ if(CINN_WITH_ROCM)
   endif()
 endif()
 
+if(CINN_WITH_CNNL)
+  message(STATUS "Enable CINN CNNL")
+  add_definitions(-DCINN_WITH_CNNL)
+  find_library(CNNL_LIB cnnl HINTS $ENV{NEUWARE_HOME}/lib64 REQUIRED)
+  if(CNNL_LIB)
+    message(STATUS "Found CNNL: ${CNNL_LIB}")
+    find_path(CNNL_INCLUDE_DIR NAMES cnnl.h HINTS $ENV{NEUWARE_HOME}/include
+              REQUIRED)
+    include_directories(${CNNL_INCLUDE_DIR})
+  else()
+    message(FATAL_ERROR "CNNL not found")
+  endif()
+endif()
 
 if(CINN_WITH_DNNL)
   message(STATUS "Enable CINN oneDNN")
@@ -236,6 +249,10 @@ endif()
 
 if(CINN_WITH_ROCM)
   target_link_libraries(cinnapi ${ROCM_HIPRTC_LIB})
+endif()
+
+if(CINN_WITH_CNNL)
+  target_link_libraries(cinnapi ${CNNL_LIB})
 endif()
 
 if(CINN_WITH_DNNL)

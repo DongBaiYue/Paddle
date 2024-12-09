@@ -29,6 +29,9 @@
 #ifdef CINN_WITH_CUDNN
 #include <cudnn.h>
 #endif
+#ifdef CINN_WITH_CNNL
+#include <cnnl.h>
+#endif
 #ifdef CINN_WITH_DNNL
 #include <dnnl.hpp>
 #include <dnnl_sycl.hpp>
@@ -1490,27 +1493,22 @@ bool RegisterCustomCallArgsFunc() {
       cinn::common::SYCLTarget(),
       CustomCallArgsForMemcpy);
 
-#ifdef CINN_WITH_DNNL
+#ifdef CINN_WITH_CNNL
   CustomCallArgsFuncRegistry::Global().Register(
-      "cinn_call_onednn_gaussian_random",
-      cinn::common::SYCLTarget(),
+      "cinn_call_cnnl_gaussian_random",
+      cinn::common::SYCLTarget(cinn::common::Target::Arch::CambriconMLU),
       CustomCallArgsForGaussianRandom);
   CustomCallArgsFuncRegistry::Global().Register(
-      "cinn_call_onednn_uniform_random",
-      cinn::common::SYCLTarget(),
+      "cinn_call_cnnl_uniform_random",
+      cinn::common::SYCLTarget(cinn::common::Target::Arch::CambriconMLU),
       CustomCallArgsForUniformRandom);
   CustomCallArgsFuncRegistry::Global().Register(
-      "cinn_call_onednn_randint",
-      cinn::common::SYCLTarget(),
+      "cinn_call_cnnl_randint",
+      cinn::common::SYCLTarget(cinn::common::Target::Arch::CambriconMLU),
       CustomCallArgsForRandInt);
-  CustomCallArgsFuncRegistry::Global().Register(
-      "cinn_call_onednn_cholesky",
-      cinn::common::SYCLTarget(),
-      CustomCallArgsForCholesky);
-  CustomCallArgsFuncRegistry::Global().Register(
-      "cinn_call_onednn_triangular_solve",
-      cinn::common::SYCLTarget(),
-      CustomCallArgsForTriangularSolve);
+#endif
+
+#ifdef CINN_WITH_DNNL
   CustomCallArgsFuncRegistry::Global().Register(
       "cinn_call_onednn_matmul",
       cinn::common::SYCLTarget(),

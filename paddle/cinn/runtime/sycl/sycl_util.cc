@@ -23,6 +23,12 @@
 #include "paddle/cinn/utils/profiler.h"
 #include "paddle/common/enforce.h"
 
+#ifdef CINN_WITH_CNNL
+#include <CL/sycl/backend/cnrt.hpp>
+#include <cnnl.h>
+#include <cnrt.h>
+#endif
+
 #ifdef CINN_WITH_DNNL
 #include <dnnl.hpp>
 #include <dnnl_sycl.hpp>
@@ -129,6 +135,269 @@ void cinn_call_sycl_memcpy(void *v_args,
 
   Queue->memcpy(output, input, count);
 }
+
+#ifdef CINN_WITH_CNNL
+class CnnlHandle {
+public:
+  CnnlHandle(const CnnlHandle &) = delete;
+  CnnlHandle &operator=(const CnnlHandle &) = delete;
+  ~CnnlHandle() {
+    CNNL_CALL(cnnlDestroy(handle));
+  }
+  static CnnlHandle &GetInstance() {
+    static CnnlHandle instance;
+    return instance;
+  }
+  cnnlHandle_t &GetCnnlHandle() { return handle; }
+
+ private:
+  CnnlHandle() {
+    CNNL_CALL(cnnlCreate(&handle));
+  }
+  cnnlHandle_t handle;
+};
+
+class CnnlRandGenerator {
+ public:
+  CnnlRandGenerator() {
+    CNNL_CALL(cnnlRandCreateGenerator(&generator_, CNNL_RAND_RNG_FAST));
+  }
+
+  explicit CnnlRandGenerator(cnnlRandRngType_t rng_type) {
+    CNNL_CALL(cnnlRandCreateGenerator(&generator_, rng_type));
+  }
+
+  ~CnnlRandGenerator() { CNNL_CALL(cnnlRandDestroyGenerator(generator_)); }
+
+  cnnlRandGenerator_t &GetGenerator() { return generator_; }
+
+  CnnlRandGenerator &SetSeed(uint64_t seed = 0ULL) {
+    // set global seed if seed is zero
+    auto rand_seed = (seed == 0ULL) ? RandomSeed::GetOrSet() : seed;
+    if (rand_seed != 0ULL && rand_seed != seed_) {
+      CNNL_CALL(cnnlRandSetPhiloxSeed(generator_, rand_seed));
+      VLOG(4) << "Change curand random seed from: " << seed_
+              << " to: " << rand_seed;
+      seed_ = rand_seed;
+    }
+    return *this;
+  }
+
+ private:
+  cnnlRandGenerator_t generator_;
+  uint64_t seed_ = 0ULL;
+};
+
+cnnlDataType_t convert_to_cnnl_dtype(void *v_args, int num_args) {
+  PADDLE_ENFORCE_GT(num_args,
+                    0,
+                    phi::errors::PreconditionNotMet(
+                        "the number of arguments must larger than zero"));
+  cinn_pod_value_t *args = static_cast<cinn_pod_value_t *>(v_args);
+  auto type_code = args[0].operator cinn_buffer_t *()->type.code;
+  int bits = args[0].operator cinn_buffer_t *()->type.bits;
+  for (int i = 1; i < num_args; ++i) {
+    auto t = args[i].operator cinn_buffer_t *()->type.code;
+    int b = args[0].operator cinn_buffer_t *()->type.bits;
+    if (t != type_code || bits != b) {
+      PADDLE_THROW(phi::errors::InvalidArgument(
+          "The types of all arguments need to be consistent."));
+    }
+  }
+  cnnlDataType_t data_type;
+  bool is_float = type_code == cinn_type_float;
+  bool is_bfloat16 = type_code == cinn_type_bfloat;
+  if (is_float && bits == 16) {
+    data_type = CNNL_DTYPE_HALF;
+  } else if (is_float && bits == 32) {
+    data_type = CNNL_DTYPE_FLOAT;
+  } else if (is_bfloat16) {
+    data_type = CNNL_DTYPE_BFLOAT16;
+  } else {
+    std::stringstream ss;
+    ss << "unsupported cudnn data type: " << static_cast<int>(type_code)
+       << ", bits = " << bits;
+    PADDLE_THROW(phi::errors::InvalidArgument(ss.str()));
+  }
+  return data_type;
+}
+
+std::string debug_cnnl_tensor_format(cnnlTensorLayout_t tensor_format) {
+  switch (tensor_format) {
+    case CNNL_LAYOUT_NCHW:
+      return "NCHW";
+    case CNNL_LAYOUT_NHWC:
+      return "NHWC";
+    default:
+      PADDLE_THROW(phi::errors::InvalidArgument(
+          "Only support NCHW and NHWC data layout\n"));
+  }
+  return "";
+}
+
+std::string debug_cnnl_tensor_dtype(cnnlDataType_t tensor_dtype) {
+  switch (tensor_dtype) {
+    case CNNL_DTYPE_FLOAT:
+      return "float32";
+    case CNNL_DTYPE_HALF:
+      return "float16";
+    case CNNL_DTYPE_BFLOAT16:
+      return "bfloat16";
+    default:
+      PADDLE_THROW(phi::errors::InvalidArgument(
+          "Only support float16/bfloat16/float32 now!"));
+  }
+  return "";
+}
+
+std::string debug_cnnl_pool_mode(cnnlPoolingMode_t pool_mode) {
+  switch (pool_mode) {
+    case CNNL_POOLING_MAX:
+      return "max";
+    case CNNL_POOLING_AVERAGE_COUNT_INCLUDE_PADDING:
+      return "avg_include_padding";
+    case CNNL_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING:
+      return "avg_exclude_padding";
+    case CNNL_POOLING_FIXED:
+      return "fixed";
+    default:
+      PADDLE_THROW(
+          phi::errors::InvalidArgument("Pool only support max and avg now!"));
+  }
+  return "";
+}
+
+class CnnlRandGeneratorFactory {
+ public:
+  enum class CnnlRandGeneratorType {
+    GENERATOR_DEFAULT,
+    GENERATOR_GAUSSIAN,
+    GENERATOR_UNIFORM,
+    GENERATOR_RANDINT,
+  };
+
+  static CnnlRandGenerator &Get(CnnlRandGeneratorType type) {
+    switch (type) {
+      case CnnlRandGeneratorType::GENERATOR_GAUSSIAN:
+        static CnnlRandGenerator gaussian_generator(CNNL_RAND_RNG_PHILOX);
+        return gaussian_generator;
+      case CnnlRandGeneratorType::GENERATOR_UNIFORM:
+        static CnnlRandGenerator uniform_generator(CNNL_RAND_RNG_PHILOX);
+        return uniform_generator;
+      case CnnlRandGeneratorType::GENERATOR_RANDINT:
+        static CnnlRandGenerator randint_generator(CNNL_RAND_RNG_PHILOX);
+        return randint_generator;
+      default:
+        static CnnlRandGenerator default_generator;
+        return default_generator;
+    }
+  }
+};
+
+void cinn_call_cnnl_gaussian_random(
+    void *v_args, int num_args, float mean, float std, int seed) {
+  cinn_pod_value_t *args = static_cast<cinn_pod_value_t *>(v_args);
+  cinn_buffer_t *output = args[0].operator cinn_buffer_t *();
+  cinn_type_t dtype = output->type;
+  size_t numel = output->num_elements();
+
+  auto Queue = SYCLBackendAPI::Global()->get_now_queue();
+  cnnlHandle_t handle = CnnlHandle::GetInstance().GetCnnlHandle();
+
+  // cnrtQueue_t queue = Queue->get_native<::sycl::backend::ext_oneapi_cnrt>();
+  cnrtQueue_t queue;
+  CNRT_CALL(cnrtQueueCreate(&queue));
+  CNNL_CALL(cnnlSetQueue(handle, queue));
+
+  cnnlRandGenerator_t generator =
+      CnnlRandGeneratorFactory::Get(
+          CnnlRandGeneratorFactory::CnnlRandGeneratorType::GENERATOR_GAUSSIAN)
+          .SetSeed(seed)
+          .GetGenerator();
+
+  VLOG(4) << "cinn_call_cnnl_gaussian_random: output_size=" << numel
+          << ", mean=" << mean << ", std=" << std << ", seed=" << seed;
+
+  if (dtype == cinn_float32_t()) {
+    float *ptr = reinterpret_cast<float *>(output->memory);
+    CNNL_CALL(cnnlRandGenerateNormal(handle, generator, CNNL_DTYPE_FLOAT, NULL, numel, mean, std, ptr));
+    CNRT_CALL(cnrtQueueSync(queue));
+  } else {
+    PADDLE_THROW(phi::errors::InvalidArgument(
+        "gaussian_random_sycl only support float32! Please check."));
+  }
+  CNRT_CALL(cnrtQueueDestroy(queue));
+}
+
+void cinn_call_cnnl_uniform_random(
+    void *v_args, int num_args, float min, float max, int seed) {
+  cinn_pod_value_t *args = static_cast<cinn_pod_value_t *>(v_args);
+  cinn_buffer_t *output = args[0].operator cinn_buffer_t *();
+  cinn_type_t dtype = output->type;
+  size_t numel = output->num_elements();
+
+  auto Queue = SYCLBackendAPI::Global()->get_now_queue();
+  cnnlHandle_t handle = CnnlHandle::GetInstance().GetCnnlHandle();
+
+  // cnrtQueue_t queue = Queue->get_native<::sycl::backend::ext_oneapi_cnrt>();
+  cnrtQueue_t queue;
+  CNRT_CALL(cnrtQueueCreate(&queue));
+  CNNL_CALL(cnnlSetQueue(handle, queue));
+
+  cnnlRandGenerator_t generator =
+      CnnlRandGeneratorFactory::Get(
+          CnnlRandGeneratorFactory::CnnlRandGeneratorType::GENERATOR_UNIFORM)
+          .SetSeed(seed)
+          .GetGenerator();
+
+  VLOG(4) << "cinn_call_cnnl_uniform_random: output_size=" << numel
+          << ", min=" << min << ", max=" << max << ", seed=" << seed;
+
+  if (dtype == cinn_float32_t()) {
+    float *ptr = reinterpret_cast<float *>(output->memory);
+    CNNL_CALL(cnnlRandGenerateUniform(handle, generator, CNNL_DTYPE_FLOAT, NULL, numel, 0.0f, 1.0f, ptr));
+    CNRT_CALL(cnrtQueueSync(queue));
+  } else {
+    PADDLE_THROW(phi::errors::InvalidArgument(
+        "uniform_random_sycl only support float32! Please check."));
+  }
+  CNRT_CALL(cnrtQueueDestroy(queue));
+}
+
+void cinn_call_cnnl_randint(void *v_args, int num_args, int seed) {
+  cinn_pod_value_t *args = static_cast<cinn_pod_value_t *>(v_args);
+  cinn_buffer_t *output = args[0].operator cinn_buffer_t *();
+  cinn_type_t dtype = output->type;
+  size_t numel = output->num_elements();
+
+  auto Queue = SYCLBackendAPI::Global()->get_now_queue();
+  cnnlHandle_t handle = CnnlHandle::GetInstance().GetCnnlHandle();
+
+  // cnrtQueue_t queue = Queue->get_native<::sycl::backend::ext_oneapi_cnrt>();
+  cnrtQueue_t queue;
+  CNRT_CALL(cnrtQueueCreate(&queue));
+  CNNL_CALL(cnnlSetQueue(handle, queue));
+
+  VLOG(4) << "cinn_call_cnnl_randint: output_size=" << numel << ", seed=" << seed;
+
+  cnnlRandGenerator_t generator =
+      CnnlRandGeneratorFactory::Get(
+          CnnlRandGeneratorFactory::CnnlRandGeneratorType::GENERATOR_RANDINT)
+          .SetSeed(seed)
+          .GetGenerator();
+
+  if (dtype == cinn_int32_t()) {
+    unsigned int *ptr = reinterpret_cast<unsigned int *>(output->memory);
+    // TODO: fix range
+    CNNL_CALL(cnnlRandGenerateDescreteUniform(handle, generator, CNNL_DTYPE_INT32, NULL, numel, 0, 1 << 23, ptr));
+    CNRT_CALL(cnrtQueueSync(queue));
+  } else {
+    PADDLE_THROW(phi::errors::InvalidArgument(
+        "randint only support int32! Please check."));
+  }
+  CNRT_CALL(cnrtQueueDestroy(queue));
+}
+#endif // CINN_WITH_CNNL
 
 #ifdef CINN_WITH_DNNL
 

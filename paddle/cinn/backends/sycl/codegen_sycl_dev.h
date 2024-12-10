@@ -105,7 +105,6 @@ class CodeGenSYCL_Dev : public CodeGenC {
  private:
   // generate unique kernel name, which is namespace + op->name.
   std::string GenerateKernelName(const ir::_LoweredFunc_* op);
-  Target target_;
   bool for_syclrtc_{false};
   // names of tensors that are from local buffers.
   std::unordered_set<std::string> local_var_names_;

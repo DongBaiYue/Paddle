@@ -750,9 +750,6 @@ inline int cinn_sycl_max_fp32(int a, int b) { return sycl::max(a, b); }
 inline float cinn_sycl_min_fp32(float a, float b) { return sycl::min(a, b); }
 inline int cinn_sycl_min_fp32(int a, int b) { return sycl::min(a, b); }
 
-#define cinn_sycl_max(x, y) cinn_sycl_max_fp32(x, y)
-#define cinn_sycl_min(x, y) cinn_sycl_min_fp32(x, y)
-
 #define MAX_SUBGROUP_SIZE 32
 // item_ct1.get_sub_group().get_max_local_range()[0]
 #define MAX_THREADNUM_INGROUP 1024

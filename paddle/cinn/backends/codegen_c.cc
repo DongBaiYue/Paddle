@@ -61,7 +61,9 @@ void CodeGenC::Compile(const ir::Module &module, const Outputs &outputs) {
   }
 }
 
-CodeGenC::CodeGenC(Target target) : ir::IrPrinter(ss_) {}
+CodeGenC::CodeGenC(Target target) : ir::IrPrinter(ss_) {
+  target_ = target;
+}
 
 std::string CodeGenC::Compile(const ir::Module &module,
                               OutputKind output_kind) {

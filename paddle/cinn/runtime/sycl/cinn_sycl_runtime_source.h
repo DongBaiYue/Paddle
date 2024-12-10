@@ -639,6 +639,112 @@ DEF_FN_FP32_VEC_BINARY(min)
 #undef DEF_FN_FP32_VEC_UNARY
 #undef DEF_FN_FP32_VEC_BINARY
 
+
+#define DEF_FN_INT32_VEC_UNARY(func)                                                \
+template <size_t Num>                                                              \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x) { \
+  DataVec<int, Num> res;                                                         \
+  sycl::ext::mlu::vector_##func(res.data_, x.data_, Num);                          \
+  return res;                                                                      \
+}                                                                                  \
+template <size_t Num>                                                              \
+inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x) {    \
+  sycl::ext::mlu::vector_##func(x.data_, x.data_, Num);                            \
+  return std::move(x);                                                             \
+}
+
+#define DEF_FN_INT32_VEC_BINARY(func)                                               \
+template <size_t Num>                                                              \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x,   \
+                                                   const DataVec<int, Num> &y) { \
+  DataVec<int, Num> res;                                                         \
+  sycl::ext::mlu::vector_##func(res.data_, x.data_, y.data_, Num);                 \
+  return res;                                                                      \
+}                                                                                  \
+template <size_t Num>                                                              \
+inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x,      \
+                                                    const DataVec<int, Num> &y) {\
+  sycl::ext::mlu::vector_##func(x.data_, x.data_, y.data_, Num);                   \
+  return std::move(x);                                                             \
+}                                                                                  \
+template <size_t Num>                                                              \
+inline DataVec<int, Num>&& cinn_sycl_##func##_int32(const DataVec<int, Num> &x, \
+                                                     DataVec<int, Num> &&y) {    \
+  sycl::ext::mlu::vector_##func(y.data_, x.data_, y.data_, Num);                   \
+  return std::move(y);                                                             \
+}                                                                                  \
+template <size_t Num>                                                              \
+inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x,      \
+                                                     DataVec<int, Num> &&y) {    \
+  sycl::ext::mlu::vector_##func(x.data_, x.data_, y.data_, Num);                   \
+  return std::move(x);                                                             \
+}                                                                                  \
+template <size_t Num>                                                              \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x,   \
+                                                   int y) {                      \
+  DataVec<int, Num> res;                                                         \
+  sycl::ext::mlu::vector_##func(res.data_, x.data_, y, Num);                       \
+  return res;                                                                      \
+}                                                                                  \
+template <size_t Num>                                                              \
+inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x,      \
+                                                     int y) {                    \
+  sycl::ext::mlu::vector_##func(x.data_, x.data_, y, Num);                         \
+  return std::move(x);                                                             \
+}                                                                                  \
+template <size_t Num>                                                              \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(int x,                        \
+                                                   const DataVec<int, Num> &y) { \
+  DataVec<int, Num> res;                                                         \
+  sycl::ext::mlu::vector_##func(res.data_, x, y.data_, Num);                       \
+  return res;                                                                      \
+}                                                                                  \
+template <size_t Num>                                                              \
+inline DataVec<int, Num>&& cinn_sycl_##func##_int32(int x,                      \
+                                                     DataVec<int, Num> &&y) {    \
+  sycl::ext::mlu::vector_##func(y.data_, x, y.data_, Num);                         \
+  return std::move(y);                                                             \
+}
+
+DEF_FN_INT32_VEC_UNARY(abs)
+DEF_FN_INT32_VEC_UNARY(acos)
+DEF_FN_INT32_VEC_UNARY(acosh)
+DEF_FN_INT32_VEC_UNARY(asin)
+DEF_FN_INT32_VEC_UNARY(asinh)
+DEF_FN_INT32_VEC_UNARY(atan)
+DEF_FN_INT32_VEC_UNARY(atanh)
+DEF_FN_INT32_VEC_UNARY(ceil)
+DEF_FN_INT32_VEC_UNARY(cos)
+DEF_FN_INT32_VEC_UNARY(cosh)
+DEF_FN_INT32_VEC_UNARY(erf)
+DEF_FN_INT32_VEC_UNARY(exp)
+DEF_FN_INT32_VEC_UNARY(floor)
+DEF_FN_INT32_VEC_UNARY(log)
+DEF_FN_INT32_VEC_UNARY(neg)
+DEF_FN_INT32_VEC_UNARY(round)
+DEF_FN_INT32_VEC_UNARY(rsqrt)
+DEF_FN_INT32_VEC_UNARY(sign)
+DEF_FN_INT32_VEC_UNARY(sin)
+DEF_FN_INT32_VEC_UNARY(sinh)
+DEF_FN_INT32_VEC_UNARY(sqrt)
+DEF_FN_INT32_VEC_UNARY(tan)
+DEF_FN_INT32_VEC_UNARY(tanh)
+DEF_FN_INT32_VEC_UNARY(trunc)
+
+DEF_FN_INT32_VEC_BINARY(add)
+DEF_FN_INT32_VEC_BINARY(sub)
+DEF_FN_INT32_VEC_BINARY(mul)
+DEF_FN_INT32_VEC_BINARY(div)
+DEF_FN_INT32_VEC_BINARY(eq)
+DEF_FN_INT32_VEC_BINARY(ne)
+DEF_FN_INT32_VEC_BINARY(pow)
+DEF_FN_INT32_VEC_BINARY(mod)
+DEF_FN_INT32_VEC_BINARY(max)
+DEF_FN_INT32_VEC_BINARY(min)
+
+#undef DEF_FN_INT32_VEC_UNARY
+#undef DEF_FN_INT32_VEC_BINARY
+
 inline float cinn_sycl_max_fp32(float a, float b) { return sycl::max(a, b); }
 inline int cinn_sycl_max_fp32(int a, int b) { return sycl::max(a, b); }
 inline float cinn_sycl_min_fp32(float a, float b) { return sycl::min(a, b); }

@@ -23,6 +23,7 @@
 #include "paddle/cinn/ir/op/ir_operators.h"
 #include "paddle/cinn/ir/utils/ir_verify.h"
 #include "paddle/cinn/optim/ir_simplify.h"
+#include "paddle/cinn/hlir/op/op_util.h"
 
 #include "paddle/cinn/backends/sycl/compiler_sycl.h"
 using cinn::backends::syclrtc::NUM;
@@ -38,7 +39,10 @@ const std::string &CodeGenSYCL_Dev::GetSourceHeader() {
   return source_header;
 }
 
-CodeGenSYCL_Dev::CodeGenSYCL_Dev(Target target) : CodeGenC(target) {}
+CodeGenSYCL_Dev::CodeGenSYCL_Dev(Target target) : CodeGenC(target) {
+  CHECK(target.language == Target::Language::sycl)
+      << "The target language is not sycl";
+}
 
 std::string CodeGenSYCL_Dev::Compile(const ir::Module &module,
                                      bool for_syclrtc) {
@@ -173,7 +177,8 @@ void CodeGenSYCL_Dev::Visit(const ir::Alloc *op) {
 }
 
 void CodeGenSYCL_Dev::Visit(const ir::Min *op) {
-  str_ += "cinn_sycl_min(";
+  str_ += hlir::GetExternFuncName(target_, op->type(), "min");
+  str_ += "(";
   IrPrinter::Visit(op->a());
   str_ += ", ";
   IrPrinter::Visit(op->b());
@@ -181,7 +186,8 @@ void CodeGenSYCL_Dev::Visit(const ir::Min *op) {
 }
 
 void CodeGenSYCL_Dev::Visit(const ir::Max *op) {
-  str_ += "cinn_sycl_max(";
+  str_ += hlir::GetExternFuncName(target_, op->type(), "max");
+  str_ += "(";
   IrPrinter::Visit(op->a());
   str_ += ", ";
   IrPrinter::Visit(op->b());

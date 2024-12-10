@@ -60,7 +60,7 @@ void MapExternCall(Expr *e, Target target) {
       if (target.arch_is_gpu()) {
         DealWithGpuintrinsics(node, expr);
       } else if (target.arch_is_mlu()) {
-        DealWithMluintrinsics(node, expr);
+        DealWithMluIntrinsics(node, expr);
       } else {
         DealWithCpuIntrinsics(node, expr);
       }
@@ -104,7 +104,7 @@ void MapExternCall(Expr *e, Target target) {
       *expr = lang::CallExtern(extern_func, node->read_args, node->attrs);
     }
 
-    void DealWithMluintrinsics(ir::Call *node, Expr *expr) {
+    void DealWithMluIntrinsics(ir::Call *node, Expr *expr) {
       auto arg_size = node->read_args.size();
       if (arg_size == 0UL) {
         // some node like __syncthreads hasn't arguments

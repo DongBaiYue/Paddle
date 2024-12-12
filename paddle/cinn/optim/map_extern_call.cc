@@ -64,6 +64,7 @@ void MapExternCall(Expr *e, Target target) {
       } else {
         DealWithCpuIntrinsics(node, expr);
       }
+      ir::IRMutator<>::Visit(op, expr);
     }
 
     void DealWithCpuIntrinsics(ir::Call *node, Expr *expr) {

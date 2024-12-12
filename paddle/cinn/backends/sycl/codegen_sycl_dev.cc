@@ -501,15 +501,11 @@ void CodeGenSYCL_Dev::Visit(const ir::Cast *op) {
   VLOG(3) << "CodeGenSYCL visiting cast op: " << op;
   VLOG(3) << op->v().type() << " to " << op->type();
   if (op->v().type().is_vector()) {
-    if (op->v().type().is_bool()) {
-      IrPrinter::Visit(op->v());
-    } else {
-      str_ += "cinn_sycl_cast<";
-      str_ += GetTypeRepr(op->type());
-      str_ += ">(";
-      IrPrinter::Visit(op->v());
-      str_ += ")";
-    }
+    str_ += "cinn_sycl_cast<";
+    str_ += GetTypeRepr(op->type());
+    str_ += ">(";
+    IrPrinter::Visit(op->v());
+    str_ += ")";
   } else {
     CodeGenC::Visit(op);
   }

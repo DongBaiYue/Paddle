@@ -1329,8 +1329,6 @@ void MergeReduceToReduce(
     const std::unordered_map<std::string, ir::Tensor>& tensor_map) {
   auto node_data = GetNodeData(node);
   auto master_data = GetNodeData(master);
-  VLOG(3) << "MergeReduceToReduce: " << node_data->id() << " -> "
-          << master_data->id();
 
   CHECK(shape_dict.count(node->inlinks_in_order()[0]->source()->id()));
   auto shape = shape_dict.at(node->inlinks_in_order()[0]->source()->id());
@@ -1343,9 +1341,7 @@ void MergeReduceToReduce(
   if (WithoutLastDimInReduce(shape, axes)) {
     auto mshape = shape_dict.at(master->inlinks_in_order()[0]->source()->id());
     if (tensor_map.count(node_data->id() + "_1")) {
-      VLOG(3) << "tensor_map.count(node_data->id() + _1) > 0";
       if (shape == mshape) {
-        VLOG(3) << "shape == mshape";
         // second step reduce
         {
           auto block = ir_sch.GetBlock(node_data->id());
@@ -1377,7 +1373,6 @@ void MergeReduceToReduce(
         auto n_tensor = tensor_map.find(node_data->id() + "_0")->second;
         auto m_tensor = tensor_map.find(master_data->id() + "_0")->second;
         if (n_tensor->shape == m_tensor->shape) {
-          VLOG(3) << "n_tensor->shape == m_tensor->shape";
           // second step reduce
           {
             auto block = ir_sch.GetBlock(node_data->id());
@@ -1411,7 +1406,6 @@ void MergeReduceToReduce(
       }
     } else {
       if (shape == mshape) {
-        VLOG(4) << "shape == mshape";
         // reduce loop
         {
           auto block = ir_sch.GetBlock(node_data->id());
@@ -1447,7 +1441,6 @@ void MergeReduceToReduce(
     }
   } else {
     if (tensor_map.count(node_data->id() + "_1")) {
-      VLOG(3) << "tensor_map.count(node_data->id() + _1) > 0";
       // identity
       {
         auto block = ir_sch.GetBlock(node_data->id());
@@ -1496,7 +1489,6 @@ void MergeReduceToReduce(
         remove_expr(&ir_sch.GetModule().GetExprs().at(0));
       }
     } else if (tensor_map.count(node_data->id() + "_0")) {
-      VLOG(3) << "tensor_map.count(node_data->id() + _0) > 0";
       // identity
       {
         auto block = ir_sch.GetBlock(node_data->id());

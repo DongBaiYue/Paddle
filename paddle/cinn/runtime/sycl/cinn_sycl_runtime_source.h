@@ -16,10 +16,10 @@
 
 #include <limits>
 #include <sycl/sycl.hpp>
-// typedef sycl::half float16;
+typedef sycl::half float16;
 // using sycl::ext::oneapi::bfloat16;
 
-// #define CINN_SYCL_FP16
+#define CINN_SYCL_FP16
 // #define CINN_SYCL_BF16
 
 /**
@@ -484,6 +484,13 @@ inline DataVec<T, Num> cinn_sycl_select(const DataVec<bool, Num> &condition, con
   return res;
 }
 
+template <typename T, size_t Num>
+inline DataVec<T, Num> cinn_sycl_select(const DataVec<bool, Num> &condition, T true_val, T false_val) {
+  DataVec<T, Num> res;
+  sycl::ext::mlu::vector_select(res.data_, condition.data_, true_val, false_val, Num);
+  return res;
+}
+
 #define DEF_FN_FP32_VEC_UNARY(func)                                                 \
 template <size_t Num>                                                               \
 inline DataVec<float, Num> cinn_sycl_##func##_fp32(const DataVec<float, Num> &x) {  \
@@ -614,10 +621,40 @@ DEF_FN_FP32_VEC_UNARY(tan)
 DEF_FN_FP32_VEC_UNARY(tanh)
 DEF_FN_FP32_VEC_UNARY(trunc)
 
+template <size_t Num>
+inline DataVec<float, Num> cinn_sycl_sigmoid_fp32(const DataVec<float, Num> &x) {
+  return 1.0f / (1.0f + cinn_sycl_exp_fp32(-x));
+}
+template <size_t Num>
+inline DataVec<float, Num>&& cinn_sycl_sigmoid_fp32(DataVec<float, Num> &&x) {
+  return 1.0f / (1.0f + cinn_sycl_exp_fp32(-std::move(x)));
+}
+
 DEF_FN_FP32_VEC_SCALAR_BINARY(max)
 DEF_FN_FP32_VEC_SCALAR_BINARY(min)
 DEF_FN_FP32_VEC_BINARY(mod)
-DEF_FN_FP32_VEC_BINARY(pow)
+
+template <size_t Num>
+inline DataVec<float, Num> cinn_sycl_pow_fp32(const DataVec<float, Num> &x,
+                                              const DataVec<float, Num> &y) {
+  DataVec<float, Num> res;
+  sycl::ext::mlu::vector_pow(res.data_, x.data_, y.data_, Num);
+  return res;
+}
+template <size_t Num>
+inline DataVec<float, Num> cinn_sycl_pow_fp32(const DataVec<float, Num> &x, float y) {
+  DataVec<float, Num> tmp = DataVec<float, Num>::Broadcast(y);
+  DataVec<float, Num> res;
+  sycl::ext::mlu::vector_pow(res.data_, x.data_, tmp.data_, Num);
+  return res;
+}
+template <size_t Num>
+inline DataVec<float, Num> cinn_sycl_pow_fp32(float x, const DataVec<float, Num> &y) {
+  DataVec<float, Num> tmp = DataVec<float, Num>::Broadcast(x);
+  DataVec<float, Num> res;
+  sycl::ext::mlu::vector_pow(res.data_, tmp.data_, y.data_, Num);
+  return res;
+}
 
 #undef DEF_FN_FP32_VEC_UNARY
 #undef DEF_FN_FP32_VEC_BINARY

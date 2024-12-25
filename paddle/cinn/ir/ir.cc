@@ -686,7 +686,7 @@ Expr Broadcast::Make(Expr value, int lanes) {
   n->value = value;
   n->lanes = lanes;
 
-  Type type(value.type().type(), value.type().bits(), lanes);
+  Type type(value.type().type(), value.type().bits(), lanes, value.type().specific_type());
   n->set_type(type);
 
   return Expr(n);

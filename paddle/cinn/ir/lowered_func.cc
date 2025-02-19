@@ -98,9 +98,11 @@ void _LoweredFunc_::PrepareCudaAxisInfoFromBody() {
         const ir::For* for_expr = expr->As<ir::For>();
         return for_expr != nullptr && for_expr->is_binded();
       });
-
+  VLOG(3)<<"PrepareCudaAxisInfoFromBody!";
   if (bound_for_exprs.empty()) {
+    VLOG(3)<<"prepare cuda axis info bound_for_exprs is empty!";
     device_api = ir::DeviceAPI::GPU;
+    VLOG(3)<<"set cuda_axis_info grid dim inx(0) = 16";    
     cuda_axis_info.set_grid_dim(0, 1);
     cuda_axis_info.set_block_dim(0, 1);
     cuda_axis_info.set_valid(true);
@@ -109,6 +111,7 @@ void _LoweredFunc_::PrepareCudaAxisInfoFromBody() {
 
   // bound_for_exprs.empty() is false
   for (const Expr& expr : bound_for_exprs) {
+    VLOG(3)<<"prepare cuda axis info bound_for_exprs is not empty!";
     const ir::For* for_expr = expr.As<ir::For>();
     if (for_expr->for_type() == ir::ForType::GPUBlock) {
       cuda_axis_info.set_grid_dim(for_expr->bind_info().offset,

@@ -83,25 +83,61 @@ void IRElementwiseSchedule(ir::IRSchedule &ir_sch,  // NOLINT
       ir_sch.Bind(splited[0], "blockIdx.x");
       ir_sch.Bind(splited[1], "threadIdx.x");
     }
-  // } else if (target.arch_is_mlu()) {
-  //   auto blocks = ir_sch.GetAllBlocks();
-  //   auto loops = ir_sch.GetLoops(blocks[0]);
-  //   ir::Expr loop = ir_sch.Fuse(loops);
+  }
+  else if (target.arch_is_mlu()) {
+    // 获取所有的循环块
+    auto blocks = ir_sch.GetAllBlocks();
+    auto loops = ir_sch.GetLoops(blocks[0]);
+    ir::Expr loop = ir_sch.Fuse(loops);
 
-  //   auto size = std::accumulate(
-  //       output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
-  //   if (size <= target.max_num_threads()) {
-  //     ir_sch.Bind(loop, "threadIdx.x");
-  //   } else if (size <= target.max_num_threads() * target.get_multi_processor_count()) {
-  //     auto splited = ir_sch.Split(loop, {-1, target.max_num_threads()});
-  //     ir_sch.Bind(splited[0], "blockIdx.x");
-  //     ir_sch.Bind(splited[1], "threadIdx.x");
-  //   } else {
-  //     auto splited = ir_sch.Split(loop, {target.get_multi_processor_count(), target.max_num_threads(), -1});
-  //     ir_sch.Bind(splited[0], "blockIdx.x");
-  //     ir_sch.Bind(splited[1], "threadIdx.x");
-  //   }
-  } else {
+    // 获取循环的维度
+    int loop_size = loops.size();
+    VLOG(3) << "loop_size : "<< loop_size;
+    // int total_elements = 1024; // 假设张量大小为1024
+
+    // 从循环范围中获取张量的维度大小
+    auto new_loop = loop.As<ir::For>();
+
+    int total_elements = new_loop->extent.get_constant(); // 获取循环的范围
+    VLOG(3) << "total_elements : "<< total_elements;    
+
+    // 计算每个核心需要处理的元素数量
+    int elements_per_core = total_elements / 16; // 16个核心
+
+    // 检查 elements_per_core 是否合法
+    if (elements_per_core <= 0) {
+        // 如果 elements_per_core 为 0，则调整任务分配策略
+        elements_per_core = 1; // 每个核心至少处理 1 个元素
+    }    
+
+    VLOG(3) << "elements_per_core : "<< elements_per_core;
+
+    auto splited = ir_sch.Split(new_loop, {-1, elements_per_core});
+
+    //设置循环为向量化
+    // new_loop.set_vectorized(true);
+
+    ir_sch.Bind_mlu(splited[0], "blockIdx.x", 0);
+    ir_sch.Bind_mlu(splited[1], "vectorized", elements_per_core);
+    // ir_sch.Bind(splited[0], "blockIdx.x");
+
+    // 修改 extent 的范围
+    // int new_extent = elements_per_core; // 新的范围
+    // new_loop->extent = Expr(new_extent); // 直接修改 extent
+
+    // int new_total_elements = new_loop->extent.get_constant(); // 获取新的循环的范围
+
+    // VLOG(3) << "new_total_elements : "<< new_total_elements;
+
+    // // 将循环展开并分配到多个核心上
+    // // new_loop 是 ir::For*
+    // // 将 new_loop 转换为 std::vector<ir::Expr>
+    // std::vector<ir::Expr> new_loops = {new_loop};
+    // // 扁平化循环
+    // ir_sch.FlattenLoops(new_loops, true);    
+    
+  } 
+  else {
     // IRScheduleInjectiveCPU(ir_sch, output_shape, target, false);
     auto blocks = ir_sch.GetAllBlocks();
     ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), true);

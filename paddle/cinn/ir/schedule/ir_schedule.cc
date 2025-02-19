@@ -621,6 +621,14 @@ void IRSchedule::Bind(const Expr& loop, const std::string& thread_axis) {
                                    {}));
 }
 
+void IRSchedule::Bind_mlu(const Expr& loop, const std::string& thread_axis, int offset) {
+  impl_->Bind_mlu(loop, thread_axis, offset);
+  trace_.Append(ScheduleDesc::Step("Bind_mlu",
+                                   {{"loop", std::vector<Expr>({loop})}},
+                                   {{"thread_axis", thread_axis},{"offset", offset}},
+                                   {}));
+}
+
 Expr IRSchedule::Rfactor(const Expr& rf_loop, int rf_axis) {
   auto result = impl_->Rfactor(rf_loop, rf_axis);
   trace_.Append(ScheduleDesc::Step("Rfactor",

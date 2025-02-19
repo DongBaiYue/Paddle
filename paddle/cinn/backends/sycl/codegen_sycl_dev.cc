@@ -115,25 +115,27 @@ void CodeGenSYCL_Dev::Visit(const ir::_LoweredFunc_ *op) {
           "[[intel::kernel_args_restrict]]";
   if (op->cuda_axis_info.valid()) {
     bool has_symbol_in_thread_num = false;
-    std::string launch_bounds_max_work_group_size =
-        "[[intel::max_work_group_size(";
-    for (int i = 0; i < 3; i++) {
-      ir::Expr block_dim = op->cuda_axis_info.block_dim(i);
-      if (block_dim.is_constant()) {
-        launch_bounds_max_work_group_size +=
-            std::to_string(block_dim.as_int64());
-        if (i < 2) {
-          launch_bounds_max_work_group_size += ", ";
-        }
-      } else {
-        has_symbol_in_thread_num = true;
-        break;
-      }
-    }
-    launch_bounds_max_work_group_size += ")]]";
-    if (!has_symbol_in_thread_num) {
-      str_ += launch_bounds_max_work_group_size;
-    }
+  //   std::string launch_bounds_max_work_group_size =
+  //       "[[intel::max_work_group_size(";
+  //   for (int i = 0; i < 3; i++) {
+  //     // ir::Expr block_dim = op->cuda_axis_info.block_dim(i);
+  //     ir::Expr grid_dim = op->cuda_axis_info.grid_dim(i);
+  //     // if (block_dim.is_constant()) {
+  //     if (grid_dim.is_constant()) {
+  //       launch_bounds_max_work_group_size +=
+  //           std::to_string(grid_dim.as_int64());
+  //       if (i < 2) {
+  //         launch_bounds_max_work_group_size += ", ";
+  //       }
+  //     } else {
+  //       has_symbol_in_thread_num = true;
+  //       break;
+  //     }
+  //   }
+  //   launch_bounds_max_work_group_size += ")]]";
+    // if (!has_symbol_in_thread_num) {
+    //   str_ += launch_bounds_max_work_group_size;
+    // }
   }
   str_ += "\n";
   // function body

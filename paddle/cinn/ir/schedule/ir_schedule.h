@@ -327,6 +327,14 @@ class IRSchedule {
    */
   void Bind(const Expr& loop, const std::string& thread_axis);
 
+  /**
+   * \brief Bind the loop to the given thread axis.
+   * @param loop the loop to Bind.
+   * @param thread_axis the name of the thread axis to be bound to the loop.
+   * @param offset the vectorized offset
+   */
+  void Bind_mlu(const Expr& loop, const std::string& thread_axis, int offset);  
+
   //! Copy another block's schedule transform.
   void CopyTransformAndLoopInfo(const Expr& block, const Expr& block_target);
 

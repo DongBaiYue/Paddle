@@ -57,6 +57,8 @@ void OptimizeExprGPU(Expr* expr);
  */
 void RemoveGpuForloopsAxis(Expr* expr);
 
+void RemoveMluForloopsAxis(Expr* expr);
+
 /**
  * Add __syncthreads() to shared memory producer.
  */

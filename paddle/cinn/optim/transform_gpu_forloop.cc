@@ -145,6 +145,41 @@ void RemoveGpuForloopsAxis(Expr *expr) {
   mutator(expr);
 }
 
+void RemoveMluForloopsAxis(Expr *expr) {
+  struct Mutator : public ir::IRMutator<Expr *> {
+    void operator()(Expr *expr) { ir::IRMutator<>::Visit(expr, expr); }
+
+   private:
+    void Visit(const ir::For *op, Expr *expr) override {
+      switch (op->for_type()) {
+        case ir::ForType::GPUBlock:
+          *expr = op->body;
+          IRMutator<>::Visit(expr, expr);
+          break;
+        case ir::ForType::GPUThread:
+          *expr = op->body;
+          IRMutator<>::Visit(expr, expr);
+          break;
+        default:
+          auto *node = expr->As<ir::For>();
+          IRMutator<>::Visit(&node->body, &node->body);
+          break;
+      }
+    }
+
+    void Visit(const ir::PolyFor *op, Expr *expr) override {
+      const auto msg =
+          "PolyFor is not allowed for MLU, only For nodes are allowed";
+      CHECK(op->for_type() != ir::ForType::GPUBlock) << msg;
+      CHECK(op->for_type() != ir::ForType::GPUThread) << msg;
+      CHECK(op->for_type() != ir::ForType::GPULane) << msg;
+    }
+  };
+
+  Mutator mutator;
+  mutator(expr);
+}
+
 /**
  * The generated __syncthreads call will be wrapped with a `if (xxxx == 0) { }`,
  * this is the problem of isl AST output, drop it to make it run in all the

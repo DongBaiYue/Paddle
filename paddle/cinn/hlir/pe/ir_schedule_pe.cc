@@ -83,24 +83,19 @@ void IRElementwiseSchedule(ir::IRSchedule &ir_sch,  // NOLINT
       ir_sch.Bind(splited[0], "blockIdx.x");
       ir_sch.Bind(splited[1], "threadIdx.x");
     }
-  // } else if (target.arch_is_mlu()) {
-  //   auto blocks = ir_sch.GetAllBlocks();
-  //   auto loops = ir_sch.GetLoops(blocks[0]);
-  //   ir::Expr loop = ir_sch.Fuse(loops);
+  } else if (target.arch_is_mlu()) {
+    auto blocks = ir_sch.GetAllBlocks();
+    ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), true);
+    auto loop = ir_sch.GetLoops(blocks[0])[0];
 
-  //   auto size = std::accumulate(
-  //       output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
-  //   if (size <= target.max_num_threads()) {
-  //     ir_sch.Bind(loop, "threadIdx.x");
-  //   } else if (size <= target.max_num_threads() * target.get_multi_processor_count()) {
-  //     auto splited = ir_sch.Split(loop, {-1, target.max_num_threads()});
-  //     ir_sch.Bind(splited[0], "blockIdx.x");
-  //     ir_sch.Bind(splited[1], "threadIdx.x");
-  //   } else {
-  //     auto splited = ir_sch.Split(loop, {target.get_multi_processor_count(), target.max_num_threads(), -1});
-  //     ir_sch.Bind(splited[0], "blockIdx.x");
-  //     ir_sch.Bind(splited[1], "threadIdx.x");
-  //   }
+    auto size = std::accumulate(
+        output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
+    int num_cores = target.max_num_threads() * target.get_multi_processor_count();
+    if (size > num_cores) {
+      while (size % num_cores != 0) num_cores--;
+      auto splited = ir_sch.Split(loop, {num_cores, -1});
+      ir_sch.Bind(splited[0], "blockIdx.x");
+    }
   } else {
     // IRScheduleInjectiveCPU(ir_sch, output_shape, target, false);
     auto blocks = ir_sch.GetAllBlocks();
@@ -129,24 +124,19 @@ void IRInjectiveSchedule(ir::IRSchedule &ir_sch,  // NOLINT
       ir_sch.Bind(splited[0], "blockIdx.x");
       ir_sch.Bind(splited[1], "threadIdx.x");
     }
-  // } else if (target.arch_is_mlu()) {
-  //   auto blocks = ir_sch.GetAllBlocks();
-  //   auto loops = ir_sch.GetLoops(blocks[0]);
-  //   ir::Expr loop = ir_sch.Fuse(loops);
+  } else if (target.arch_is_mlu()) {
+    auto blocks = ir_sch.GetAllBlocks();
+    ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), false);
+    auto loop = ir_sch.GetLoops(blocks[0])[0];
 
-  //   auto size = std::accumulate(
-  //       output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
-  //   if (size <= target.max_num_threads()) {
-  //     ir_sch.Bind(loop, "threadIdx.x");
-  //   } else if (size <= target.max_num_threads() * target.get_multi_processor_count()) {
-  //     auto splited = ir_sch.Split(loop, {-1, target.max_num_threads()});
-  //     ir_sch.Bind(splited[0], "blockIdx.x");
-  //     ir_sch.Bind(splited[1], "threadIdx.x");
-  //   } else {
-  //     auto splited = ir_sch.Split(loop, {target.get_multi_processor_count(), target.max_num_threads(), -1});
-  //     ir_sch.Bind(splited[0], "blockIdx.x");
-  //     ir_sch.Bind(splited[1], "threadIdx.x");
-  //   }
+    auto size = std::accumulate(
+        output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
+    int num_cores = target.max_num_threads() * target.get_multi_processor_count();
+    if (size > num_cores) {
+      while (size % num_cores != 0) num_cores--;
+      auto splited = ir_sch.Split(loop, {num_cores, -1});
+      ir_sch.Bind(splited[0], "blockIdx.x");
+    }
   } else {
     // IRScheduleInjectiveCPU(ir_sch, output_shape, target, false);
     auto blocks = ir_sch.GetAllBlocks();
@@ -198,39 +188,18 @@ void IRScheduleInjectiveMLU(ir::IRSchedule &ir_sch,  // NOLINT
                             const cinn::common::Target &target) {
   VLOG(3) << "Begin IRScheduleInjectiveMLU"
           << ir_sch.GetModule().GetExprs().at(0);
-  auto all_blocks = ir_sch.GetAllBlocks();
-  auto loops = ir_sch.GetLoops(all_blocks[0]);
-  int dims = output_shape.size();
-  int factor = GetBasicFactor(GetTensor(all_blocks[0])->type(), target);
-  auto fused = loops[0];
-  if (dims >= 5) {
-    CHECK_GE(loops.size(), 3U);
-    fused = ir_sch.Fuse({loops[0], loops[1], loops[2]});
-    dims = dims - 2;
-  } else if (dims >= 3) {
-    CHECK_GE(loops.size(), 2U);
-    fused = ir_sch.Fuse({loops[0], loops[1]});
-    dims = dims - 1;
-  }
-  // auto all_blocks = ir_sch.GetAllBlocks();
-  // auto loops = ir_sch.GetLoops(all_blocks[0]);
-  // auto fused = ir_sch.Fuse(loops);
+  auto blocks = ir_sch.GetAllBlocks();
+  ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), false);
+  auto loop = ir_sch.GetLoops(blocks[0])[0];
 
-  // int num_thread = target.max_num_threads();
-  // int mp_count = target.get_multi_processor_count();
-  // int prod_size = std::accumulate(
-  //     output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
-  // if (prod_size > num_thread * mp_count) {
-  //   auto splited = ir_sch.Split(fused, {mp_count, num_thread, -1});
-  //   ir_sch.Bind(splited[0], "blockIdx.x");
-  //   ir_sch.Bind(splited[1], "threadIdx.x");
-  // } else if (prod_size > num_thread) {
-  //   auto splited = ir_sch.Split(fused, {-1, num_thread});
-  //   ir_sch.Bind(splited[0], "blockIdx.x");
-  //   ir_sch.Bind(splited[1], "threadIdx.x");
-  // } else {
-  //   ir_sch.Bind(fused, "threadIdx.x");
-  // }
+  auto size = std::accumulate(
+      output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
+  int num_cores = target.max_num_threads() * target.get_multi_processor_count();
+  if (size > num_cores) {
+    while (size % num_cores != 0) num_cores--;
+    auto splited = ir_sch.Split(loop, {num_cores, -1});
+    ir_sch.Bind(splited[0], "blockIdx.x");
+  }
   VLOG(3) << "After IRScheduleInjectiveMLU, new ir is : "
           << ir_sch.GetModule().GetExprs().at(0);
 }

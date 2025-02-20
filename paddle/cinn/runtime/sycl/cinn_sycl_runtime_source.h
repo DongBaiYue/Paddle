@@ -28,91 +28,97 @@ typedef sycl::half float16;
  */
 template <typename T, size_t Num>
 struct DataVec;
-
 template <size_t Num>
 struct IndexVecWithMod;
-
 template <size_t Num>
 struct IndexVecWithDenom;
 
+// (base, base+1, base+2, ..., base+Num-1)
 template <size_t Num>
 struct IndexVec {
-  typedef IndexVec<Num> self_type;
+  using self_type = IndexVec<Num>;
   int base;
 
-  inline explicit IndexVec(int base) : base(base) {}
+  explicit IndexVec(int base) : base(base) {}
 
-  inline static constexpr self_type Ramp(int base) {
+  static constexpr self_type Ramp(int base) {
     self_type res(base);
     return res;
   }
 
-  inline constexpr IndexVecWithMod<Num> operator%(int val) const;
+  constexpr self_type operator+(int val) const {
+    self_type res(base + val);
+    return res;
+  }
+  constexpr self_type operator-(int val) const {
+    self_type res(base - val);
+    return res;
+  }
+  constexpr IndexVecWithMod<Num> operator%(int val) const;
+  constexpr IndexVecWithDenom<Num> operator/(int val) const;
 
-  inline constexpr IndexVecWithDenom<Num> operator/(int val) const;
-
-  inline DataVec<float, Num> operator<(int val) const;
+  DataVec<float, Num> operator<(int val) const;
 };
 
+// (Ramp<Num>(base) % mod) / denom
 template <size_t Num>
 struct IndexVecWithMod {
+  using self_type = IndexVecWithMod<Num>;
   int base;
   int denominator;
   int mod;
 
-  inline IndexVecWithMod(int base, int denominator, int mod) : base(base), denominator(denominator), mod(mod) {}
+  constexpr self_type operator/(int val) const {
+    self_type res{base, denominator * val, mod};
+    return res;
+  }
 
-  inline constexpr IndexVecWithMod<Num> operator/(int val) const;
-
-  inline DataVec<float, Num> operator<(int val) const;
+  DataVec<float, Num> operator<(int val) const;
 };
 
+// Ramp<Num>(base) / denom
 template <size_t Num>
 struct IndexVecWithDenom {
+  using self_type = IndexVecWithDenom<Num>;
   int base;
   int denominator;
 
-  inline IndexVecWithDenom(int base, int denominator) : base(base), denominator(denominator) {}
+  constexpr self_type operator+(int val) const {
+    self_type res{base + val * denominator, denominator};
+    return res;
+  }
+  constexpr self_type operator-(int val) const {
+    self_type res{base - val * denominator, denominator};
+    return res;
+  }
+  constexpr self_type operator/(int val) const {
+    self_type res{base, denominator * val};
+    return res;
+  }
 
-  inline constexpr IndexVecWithDenom<Num> operator/(int val) const;
-
-  inline DataVec<float, Num> operator<(int val) const;
+  DataVec<float, Num> operator<(int val) const;
 };
 
 template <size_t Num>
 inline constexpr IndexVecWithMod<Num> IndexVec<Num>::operator%(int val) const {
-  IndexVecWithMod<Num> res(base, 1, val);
+  IndexVecWithMod<Num> res{base, 1, val};
   return res;
 }
-
 template <size_t Num>
 inline constexpr IndexVecWithDenom<Num> IndexVec<Num>::operator/(int val) const {
-  IndexVecWithDenom<Num> res(base, val);
-  return res;
-}
-
-template <size_t Num>
-inline constexpr IndexVecWithMod<Num> IndexVecWithMod<Num>::operator/(int val) const {
-  IndexVecWithMod<Num> res(base, denominator * val, mod);
-  return res;
-}
-
-template <size_t Num>
-inline constexpr IndexVecWithDenom<Num> IndexVecWithDenom<Num>::operator/(int val) const {
-  IndexVecWithDenom<Num> res(base, denominator * val);
+  IndexVecWithDenom<Num> res{base, val};
   return res;
 }
 
 template <typename T, size_t Num>
 struct DataVec {
-  typedef T value_type;
-  typedef DataVec<T, Num> self_type;
+  using value_type = T;
+  using self_type = DataVec<T, Num>;
   value_type *data_ = nullptr;
 
-  inline DataVec() { 
+  DataVec() { 
     data_ = *sycl::ext::mlu::sycl_nram_memory<value_type[Num]>(); 
   }
-
   DataVec(const DataVec& other) {
     data_ = *sycl::ext::mlu::sycl_nram_memory<value_type[Num]>();
     sycl::ext::mlu::memcpy_nram2nram(data_, other.data_, Num);
@@ -124,15 +130,15 @@ struct DataVec {
   DataVec& operator=(const DataVec&) = delete;
   DataVec& operator=(DataVec&&) = delete;
 
-  inline explicit DataVec(void *data) : data_(reinterpret_cast<value_type *>(data)) {}
+  explicit DataVec(void *data) : data_(reinterpret_cast<value_type *>(data)) {}
 
-  inline static self_type Load(const value_type* base, int32_t offset) {
+  static self_type Load(const value_type* base, int32_t offset) {
     self_type res;
     sycl::ext::mlu::memcpy_gdram2nram(res.data_, base + offset, Num);
     return res;
   }
 
-  inline static void _load(value_type* dst, const value_type* src, int start, int n, int denom) {
+  static void _load(value_type* dst, const value_type* src, int start, int n, int denom) {
     // dest[0:n] = src[(start:start+n)/denom]
     int remain = denom - start % denom;
     for (int dst_idx = 0, src_idx = start / denom; dst_idx < n; src_idx++) {
@@ -143,21 +149,21 @@ struct DataVec {
     }
   }
 
-  inline static self_type Load(const value_type* addr, const IndexVec<Num>& offset) {
+  static self_type Load(const value_type* addr, const IndexVec<Num>& offset) {
     self_type res;
     int base = offset.base;
     sycl::ext::mlu::memcpy_gdram2nram(res.data_, addr + base, Num);
     return res;
   }
 
-  inline static self_type Load(const value_type* addr, const IndexVecWithDenom<Num>& offset) {
+  static self_type Load(const value_type* addr, const IndexVecWithDenom<Num>& offset) {
     self_type res;
     int base = offset.base, denom = offset.denominator;
     _load(res.data_, addr, base, Num, denom);
     return res;
   }
 
-  inline static self_type Load(const value_type* addr, const IndexVecWithMod<Num>& offset) {
+  static self_type Load(const value_type* addr, const IndexVecWithMod<Num>& offset) {
     // dst[0:n] = src[((base:base+n) % mod) / denom]
     self_type res;
     int base = offset.base, denom = offset.denominator, mod = offset.mod;
@@ -173,204 +179,204 @@ struct DataVec {
     return res;
   }
 
-  inline static self_type Broadcast(value_type val) {
+  static self_type Broadcast(value_type val) {
     self_type res;
     sycl::ext::mlu::memset_nram(res.data_, val, Num);
     return res;
   }
 
-  inline self_type operator+() const { return *this; }
-  inline self_type&& operator+() { return std::move(*this); }
+  self_type operator+() const { return *this; }
+  self_type operator+() { return std::move(*this); }
 
-  inline self_type operator-() const & {
+  self_type operator-() const & {
     self_type res;
     sycl::ext::mlu::vector_neg(res.data_, data_, Num);
     return res;
   }
-  inline self_type&& operator-() && {
+  self_type operator-() && {
     sycl::ext::mlu::vector_neg(data_, data_, Num);
     return std::move(*this);
   }
 
-  inline friend self_type operator+(const self_type& lhs, const self_type& rhs) {
+  friend self_type operator+(const self_type& lhs, const self_type& rhs) {
     self_type res;
     sycl::ext::mlu::vector_add(res.data_, lhs.data_, rhs.data_, Num);
     return res;
   }
-  inline friend self_type&& operator+(self_type&& lhs, const self_type& rhs) {
+  friend self_type operator+(self_type&& lhs, const self_type& rhs) {
     sycl::ext::mlu::vector_add(lhs.data_, lhs.data_, rhs.data_, Num);
     return std::move(lhs);
   }
-  inline friend self_type&& operator+(const self_type& lhs, self_type&& rhs) {
+  friend self_type operator+(const self_type& lhs, self_type&& rhs) {
     return std::move(rhs) + lhs;
   }
-  inline friend self_type&& operator+(self_type&& lhs, self_type&& rhs) {
+  friend self_type operator+(self_type&& lhs, self_type&& rhs) {
     return std::move(lhs) + rhs;
   }
 
-  inline friend self_type operator+(const self_type& vec, value_type val) {
+  friend self_type operator+(const self_type& vec, value_type val) {
     self_type res;
     sycl::ext::mlu::vector_add(res.data_, vec.data_, val, Num);
     return res;
   }
-  inline friend self_type&& operator+(self_type&& vec, value_type val) {
+  friend self_type operator+(self_type&& vec, value_type val) {
     sycl::ext::mlu::vector_add(vec.data_, vec.data_, val, Num);
     return std::move(vec);
   }
-  inline friend self_type operator+(value_type val, const self_type& vec) {
+  friend self_type operator+(value_type val, const self_type& vec) {
     return vec + val;
   }
-  inline friend self_type&& operator+(value_type val, self_type&& vec) {
+  friend self_type operator+(value_type val, self_type&& vec) {
     return std::move(vec) + val;
   }
 
-  inline friend self_type operator-(const self_type& lhs, const self_type& rhs) {
+  friend self_type operator-(const self_type& lhs, const self_type& rhs) {
     self_type res;
     sycl::ext::mlu::vector_sub(res.data_, lhs.data_, rhs.data_, Num);
     return res;
   }
-  inline friend self_type&& operator-(self_type&& lhs, const self_type& rhs) {
+  friend self_type operator-(self_type&& lhs, const self_type& rhs) {
     sycl::ext::mlu::vector_sub(lhs.data_, lhs.data_, rhs.data_, Num);
     return std::move(lhs);
   }
-  inline friend self_type&& operator-(const self_type& lhs, self_type&& rhs) {
+  friend self_type operator-(const self_type& lhs, self_type&& rhs) {
     sycl::ext::mlu::vector_sub(rhs.data_, lhs.data_, rhs.data_, Num);
     return std::move(rhs);
   }
-  inline friend self_type&& operator-(self_type&& lhs, self_type&& rhs) {
+  friend self_type operator-(self_type&& lhs, self_type&& rhs) {
     return std::move(lhs) - rhs;
   }
 
-  inline friend self_type operator-(const self_type& vec, value_type val) {
+  friend self_type operator-(const self_type& vec, value_type val) {
     self_type res;
     sycl::ext::mlu::vector_sub(res.data_, vec.data_, val, Num);
     return res;
   }
-  inline friend self_type&& operator-(self_type&& vec, value_type val) {
+  friend self_type operator-(self_type&& vec, value_type val) {
     sycl::ext::mlu::vector_sub(vec.data_, vec.data_, val, Num);
     return std::move(vec);
   }
-  inline friend self_type operator-(value_type val, const self_type& vec) {
+  friend self_type operator-(value_type val, const self_type& vec) {
     self_type res;
     sycl::ext::mlu::vector_sub(res.data_, val, vec.data_, Num);
     return res;
   }
-  inline friend self_type&& operator-(value_type val, self_type&& vec) {
+  friend self_type operator-(value_type val, self_type&& vec) {
     sycl::ext::mlu::vector_sub(vec.data_, val, vec.data_, Num);
     return std::move(vec);
   }
 
-  inline friend self_type operator*(const self_type& lhs, const self_type& rhs) {
+  friend self_type operator*(const self_type& lhs, const self_type& rhs) {
     self_type res;
     sycl::ext::mlu::vector_mul(res.data_, lhs.data_, rhs.data_, Num);
     return res;
   }
-  inline friend self_type&& operator*(self_type&& lhs, const self_type& rhs) {
+  friend self_type operator*(self_type&& lhs, const self_type& rhs) {
     sycl::ext::mlu::vector_mul(lhs.data_, lhs.data_, rhs.data_, Num);
     return std::move(lhs);
   }
-  inline friend self_type&& operator*(const self_type& lhs, self_type&& rhs) {
+  friend self_type operator*(const self_type& lhs, self_type&& rhs) {
     return std::move(rhs) * lhs;
   }
-  inline friend self_type&& operator*(self_type&& lhs, self_type&& rhs) {
+  friend self_type operator*(self_type&& lhs, self_type&& rhs) {
     return std::move(lhs) * rhs;
   }
 
-  inline friend self_type operator*(const self_type& vec, value_type val) {
+  friend self_type operator*(const self_type& vec, value_type val) {
     self_type res;
     sycl::ext::mlu::vector_mul(res.data_, vec.data_, val, Num);
     return res;
   }
-  inline friend self_type&& operator*(self_type&& vec, value_type val) {
+  friend self_type operator*(self_type&& vec, value_type val) {
     sycl::ext::mlu::vector_mul(vec.data_, vec.data_, val, Num);
     return std::move(vec);
   }
-  inline friend self_type operator*(value_type val, const self_type& vec) {
+  friend self_type operator*(value_type val, const self_type& vec) {
     return vec * val;
   }
-  inline friend self_type&& operator*(value_type val, self_type&& vec) {
+  friend self_type operator*(value_type val, self_type&& vec) {
     return std::move(vec) * val;
   }
 
-  inline friend self_type operator/(const self_type& lhs, const self_type& rhs) {
+  friend self_type operator/(const self_type& lhs, const self_type& rhs) {
     self_type res;
     sycl::ext::mlu::vector_div(res.data_, lhs.data_, rhs.data_, Num);
     return res;
   }
-  inline friend self_type&& operator/(self_type&& lhs, const self_type& rhs) {
+  friend self_type operator/(self_type&& lhs, const self_type& rhs) {
     sycl::ext::mlu::vector_div(lhs.data_, lhs.data_, rhs.data_, Num);
     return std::move(lhs);
   }
-  inline friend self_type&& operator/(const self_type& lhs, self_type&& rhs) {
+  friend self_type operator/(const self_type& lhs, self_type&& rhs) {
     sycl::ext::mlu::vector_div(rhs.data_, lhs.data_, rhs.data_, Num);
     return std::move(rhs);
   }
-  inline friend self_type&& operator/(self_type&& lhs, self_type&& rhs) {
+  friend self_type operator/(self_type&& lhs, self_type&& rhs) {
     return std::move(lhs) / rhs;
   }
 
-  inline friend self_type operator/(const self_type& vec, value_type val) {
+  friend self_type operator/(const self_type& vec, value_type val) {
     self_type res;
     sycl::ext::mlu::vector_div(res.data_, vec.data_, val, Num);
     return res;
   }
-  inline friend self_type&& operator/(self_type&& vec, value_type val) {
+  friend self_type operator/(self_type&& vec, value_type val) {
     sycl::ext::mlu::vector_div(vec.data_, vec.data_, val, Num);
     return std::move(vec);
   }
-  inline friend self_type operator/(value_type val, const self_type& vec) {
+  friend self_type operator/(value_type val, const self_type& vec) {
     self_type res;
     sycl::ext::mlu::vector_div(res.data_, val, vec.data_, Num);
     return res;
   }
-  inline friend self_type&& operator/(value_type val, self_type&& vec) {
+  friend self_type operator/(value_type val, self_type&& vec) {
     sycl::ext::mlu::vector_div(vec.data_, val, vec.data_, Num);
     return std::move(vec);
   }
 
-  inline friend self_type operator%(const self_type& lhs, const self_type& rhs) {
+  friend self_type operator%(const self_type& lhs, const self_type& rhs) {
     self_type res;
     sycl::ext::mlu::vector_mod(res.data_, lhs.data_, rhs.data_, Num);
     return res;
   }
-  inline friend self_type&& operator%(self_type&& lhs, const self_type& rhs) {
+  friend self_type operator%(self_type&& lhs, const self_type& rhs) {
     sycl::ext::mlu::vector_mod(lhs.data_, lhs.data_, rhs.data_, Num);
     return std::move(lhs);
   }
-  inline friend self_type&& operator%(const self_type& lhs, self_type&& rhs) {
+  friend self_type operator%(const self_type& lhs, self_type&& rhs) {
     sycl::ext::mlu::vector_mod(rhs.data_, lhs.data_, rhs.data_, Num);
     return std::move(rhs);
   }
-  inline friend self_type&& operator%(self_type&& lhs, self_type&& rhs) {
+  friend self_type operator%(self_type&& lhs, self_type&& rhs) {
     return std::move(lhs) % rhs;
   }
 
-  inline friend self_type operator%(const self_type& vec, value_type val) {
+  friend self_type operator%(const self_type& vec, value_type val) {
     self_type tmp = Broadcast(val);
     sycl::ext::mlu::vector_mod(tmp.data_, vec.data_, tmp.data_, Num);
     return tmp;
   }
-  inline friend self_type operator%(value_type val, const self_type& vec) {
+  friend self_type operator%(value_type val, const self_type& vec) {
     self_type tmp = Broadcast(val);
     sycl::ext::mlu::vector_mod(tmp.data_, tmp.data_, vec.data_, Num);
     return tmp;
   }
 
-#define DEF_CMP_OP(op, func)                                                          \
-  inline DataVec<bool, Num> operator op(const self_type& other) const {               \
-    DataVec<bool, Num> res;                                                           \
-    sycl::ext::mlu::vector_##func(res.data_, data_, other.data_, Num);                \
-    return res;                                                                       \
-  }                                                                                   \
-  inline DataVec<bool, Num> operator op(value_type val) const {                       \
-    DataVec<bool, Num> res;                                                           \
-    sycl::ext::mlu::vector_##func(res.data_, data_, val, Num);                        \
-    return res;                                                                       \
-  }                                                                                   \
-  inline friend DataVec<bool, Num> operator op(value_type val, const self_type& vec) {\
-    DataVec<bool, Num> res;                                                           \
-    sycl::ext::mlu::vector_##func(res.data_, val, vec.data_, Num);                    \
-    return res;                                                                       \
+#define DEF_CMP_OP(op, func)                                                    \
+  DataVec<bool, Num> operator op(const self_type& other) const {                \
+    DataVec<bool, Num> res;                                                     \
+    sycl::ext::mlu::vector_##func(res.data_, data_, other.data_, Num);          \
+    return res;                                                                 \
+  }                                                                             \
+  DataVec<bool, Num> operator op(value_type val) const {                        \
+    DataVec<bool, Num> res;                                                     \
+    sycl::ext::mlu::vector_##func(res.data_, data_, val, Num);                  \
+    return res;                                                                 \
+  }                                                                             \
+  friend DataVec<bool, Num> operator op(value_type val, const self_type& vec) { \
+    DataVec<bool, Num> res;                                                     \
+    sycl::ext::mlu::vector_##func(res.data_, val, vec.data_, Num);              \
+    return res;                                                                 \
   }
 
   DEF_CMP_OP(==, eq)
@@ -381,8 +387,8 @@ struct DataVec {
   DEF_CMP_OP(<=, le)
 #undef DEF_CMP_OP
 
-  inline value_type& operator[](size_t i) { return data_[i]; }
-  inline value_type operator[](size_t i) const { return data_[i]; }
+  value_type& operator[](size_t i) { return data_[i]; }
+  value_type operator[](size_t i) const { return data_[i]; }
 
   static constexpr size_t num_bytes() { return Num * sizeof(value_type); }
 };
@@ -499,7 +505,7 @@ inline DataVec<float, Num> cinn_sycl_##func##_fp32(const DataVec<float, Num> &x)
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(DataVec<float, Num> &&x) {     \
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(DataVec<float, Num> &&x) {       \
   sycl::ext::mlu::vector_##func(x.data_, x.data_, Num);                             \
   return std::move(x);                                                              \
 }
@@ -513,20 +519,20 @@ inline DataVec<float, Num> cinn_sycl_##func##_fp32(const DataVec<float, Num> &x,
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,       \
-                                                     const DataVec<float, Num> &y) {\
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,         \
+                                                   const DataVec<float, Num> &y) {  \
   sycl::ext::mlu::vector_##func(x.data_, x.data_, y.data_, Num);                    \
   return std::move(x);                                                              \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(const DataVec<float, Num> &x,  \
-                                                     DataVec<float, Num> &&y) {     \
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(const DataVec<float, Num> &x,    \
+                                                   DataVec<float, Num> &&y) {       \
   sycl::ext::mlu::vector_##func(y.data_, x.data_, y.data_, Num);                    \
   return std::move(y);                                                              \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,       \
-                                                     DataVec<float, Num> &&y) {     \
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,         \
+                                                   DataVec<float, Num> &&y) {       \
   return cinn_sycl_##func##_fp32(std::move(x), y);                                  \
 }                                                                                   \
 template <size_t Num>                                                               \
@@ -553,20 +559,20 @@ inline DataVec<float, Num> cinn_sycl_##func##_fp32(const DataVec<float, Num> &x,
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,       \
-                                                     const DataVec<float, Num> &y) {\
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,         \
+                                                   const DataVec<float, Num> &y) {  \
   sycl::ext::mlu::vector_##func(x.data_, x.data_, y.data_, Num);                    \
   return std::move(x);                                                              \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(const DataVec<float, Num> &x,  \
-                                                     DataVec<float, Num> &&y) {     \
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(const DataVec<float, Num> &x,    \
+                                                   DataVec<float, Num> &&y) {       \
   sycl::ext::mlu::vector_##func(y.data_, x.data_, y.data_, Num);                    \
   return std::move(y);                                                              \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,       \
-                                                     DataVec<float, Num> &&y) {     \
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,         \
+                                                   DataVec<float, Num> &&y) {       \
   return cinn_sycl_##func##_fp32(std::move(x), y);                                  \
 }                                                                                   \
 template <size_t Num>                                                               \
@@ -577,8 +583,8 @@ inline DataVec<float, Num> cinn_sycl_##func##_fp32(const DataVec<float, Num> &x,
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,       \
-                                                     float y) {                     \
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(DataVec<float, Num> &&x,         \
+                                                   float y) {                       \
   sycl::ext::mlu::vector_##func(x.data_, x.data_, y, Num);                          \
   return std::move(x);                                                              \
 }                                                                                   \
@@ -590,8 +596,8 @@ inline DataVec<float, Num> cinn_sycl_##func##_fp32(float x,                     
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<float, Num>&& cinn_sycl_##func##_fp32(float x,                       \
-                                                     DataVec<float, Num> &&y) {     \
+inline DataVec<float, Num> cinn_sycl_##func##_fp32(float x,                         \
+                                                   DataVec<float, Num> &&y) {       \
   sycl::ext::mlu::vector_##func(y.data_, x, y.data_, Num);                          \
   return std::move(y);                                                              \
 }
@@ -626,7 +632,7 @@ inline DataVec<float, Num> cinn_sycl_sigmoid_fp32(const DataVec<float, Num> &x) 
   return 1.0f / (1.0f + cinn_sycl_exp_fp32(-x));
 }
 template <size_t Num>
-inline DataVec<float, Num>&& cinn_sycl_sigmoid_fp32(DataVec<float, Num> &&x) {
+inline DataVec<float, Num> cinn_sycl_sigmoid_fp32(DataVec<float, Num> &&x) {
   return 1.0f / (1.0f + cinn_sycl_exp_fp32(-std::move(x)));
 }
 
@@ -668,7 +674,7 @@ inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x) { 
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x) {        \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(DataVec<int, Num> &&x) {          \
   sycl::ext::mlu::vector_##func(x.data_, x.data_, Num);                             \
   return std::move(x);                                                              \
 }
@@ -682,20 +688,20 @@ inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x,   
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x,          \
-                                                    const DataVec<int, Num> &y) {   \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(DataVec<int, Num> &&x,            \
+                                                  const DataVec<int, Num> &y) {     \
   sycl::ext::mlu::vector_##func(x.data_, x.data_, y.data_, Num);                    \
   return std::move(x);                                                              \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(const DataVec<int, Num> &x,     \
-                                                    DataVec<int, Num> &&y) {        \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x,       \
+                                                  DataVec<int, Num> &&y) {          \
   sycl::ext::mlu::vector_##func(y.data_, x.data_, y.data_, Num);                    \
   return std::move(y);                                                              \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x,          \
-                                                    DataVec<int, Num> &&y) {        \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(DataVec<int, Num> &&x,            \
+                                                  DataVec<int, Num> &&y) {          \
   return cinn_sycl_##func##_int32(std::move(x), y);                                 \
 }                                                                                   \
 template <size_t Num>                                                               \
@@ -722,20 +728,20 @@ inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x,   
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x,          \
-                                                    const DataVec<int, Num> &y) {   \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(DataVec<int, Num> &&x,            \
+                                                  const DataVec<int, Num> &y) {     \
   sycl::ext::mlu::vector_##func(x.data_, x.data_, y.data_, Num);                    \
   return std::move(x);                                                              \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(const DataVec<int, Num> &x,     \
-                                                    DataVec<int, Num> &&y) {        \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x,       \
+                                                  DataVec<int, Num> &&y) {          \
   sycl::ext::mlu::vector_##func(y.data_, x.data_, y.data_, Num);                    \
   return std::move(y);                                                              \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x,          \
-                                                    DataVec<int, Num> &&y) {        \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(DataVec<int, Num> &&x,            \
+                                                  DataVec<int, Num> &&y) {          \
   return cinn_sycl_##func##_int32(std::move(x), y);                                 \
 }                                                                                   \
 template <size_t Num>                                                               \
@@ -746,8 +752,8 @@ inline DataVec<int, Num> cinn_sycl_##func##_int32(const DataVec<int, Num> &x,   
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(DataVec<int, Num> &&x,          \
-                                                    int y) {                        \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(DataVec<int, Num> &&x,            \
+                                                  int y) {                          \
   sycl::ext::mlu::vector_##func(x.data_, x.data_, y, Num);                          \
   return std::move(x);                                                              \
 }                                                                                   \
@@ -759,8 +765,8 @@ inline DataVec<int, Num> cinn_sycl_##func##_int32(int x,                        
   return res;                                                                       \
 }                                                                                   \
 template <size_t Num>                                                               \
-inline DataVec<int, Num>&& cinn_sycl_##func##_int32(int x,                          \
-                                                    DataVec<int, Num> &&y) {        \
+inline DataVec<int, Num> cinn_sycl_##func##_int32(int x,                            \
+                                                  DataVec<int, Num> &&y) {          \
   sycl::ext::mlu::vector_##func(y.data_, x, y.data_, Num);                          \
   return std::move(y);                                                              \
 }

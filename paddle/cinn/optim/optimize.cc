@@ -58,7 +58,7 @@ Expr Optimize(Expr e,
 
   VectorizeLoops(&copied, target);
   VLOG(4) << "After Optimize VectorizeLoops:" << copied;
-  if (target.arch_is_gpu() || target.arch_is_mlu()) {
+  if (target.arch_is_gpu()) {
 #ifdef CINN_WITH_GPU
     if (copied.as_lowered_func()) {
       ir::SetCudaAxisInfo(&copied);
@@ -68,6 +68,16 @@ Expr Optimize(Expr e,
     }
     CudaSyncThreadsDropIfThenElse(&copied);
     // TransBufferWithDynamicShape(&copied);
+#endif
+  } else if (target.arch_is_mlu()) {
+#ifdef CINN_WITH_GPU
+    if (copied.as_lowered_func()) {
+      ir::SetCudaAxisInfo(&copied);
+    }
+    if (remove_gpu_for_loops) {
+      RemoveMluForloopsAxis(&copied);
+    }
+    CudaSyncThreadsDropIfThenElse(&copied);
 #endif
   }
   SimplifyBlocks(&copied);

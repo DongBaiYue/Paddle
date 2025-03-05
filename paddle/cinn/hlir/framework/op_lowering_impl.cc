@@ -693,7 +693,7 @@ ir::Expr OpLowererImpl::DoGroupSchedule(
               << ir_sch.GetModule().GetExprs().at(0);
       auto loop_inner = loops.back();
       auto psize = ir::GetLoopExtent(loop_inner);
-      int vector_width = 4096;
+      int vector_width = 32768;
       if (vector_width >= psize)
         vector_width = psize;
       else {
@@ -701,7 +701,7 @@ ir::Expr OpLowererImpl::DoGroupSchedule(
           vector_width--;
         }
       }
-      if (vector_width >= 16) {
+      if (vector_width > 1) {
         ir_sch.Vectorize(loop_inner, vector_width);
         VLOG(4) << "After vectorize, ir is: \n"
                 << ir_sch.GetModule().GetExprs().at(0);

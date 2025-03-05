@@ -1362,17 +1362,13 @@ inline float cinn_warp_reduce_avg_fp32(const float *buf,
   return cinn_warp_reduce_sum_fp32(buf, offset, extend, item_ct1) / extend;
 }
 
-/*
-DPCT1065:41: Consider replacing sycl::nd_item::barrier() with
-sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
-performance if there is no access to global memory.
-*/
 #define CINN_BLOCK_REDUCE_INTERNAL_IMPL(                                     \
     TYPE, value, init_value, cinn_warp_shuffle_internal)                     \
+  auto group = item_ct1.get_group();                                         \
   unsigned int subgroup_id = item_ct1.get_sub_group().get_group_id()[0];     \
   auto tmp =                                                                 \
-      *sycl::group_local_memory<TYPE[MAX_SUBGROUPNUM_INGROUP]>( \
-          item_ct1.get_group());                                             \
+      *sycl::group_local_memory<TYPE[MAX_SUBGROUPNUM_INGROUP]>(              \
+          group);                                                            \
   if (subgroup_id == 0) {                                                    \
     tmp[item_ct1.get_local_id(2)] = init_value;                              \
   }                                                                          \
@@ -1380,11 +1376,11 @@ performance if there is no access to global memory.
   if (item_ct1.get_sub_group().get_local_range()[0] == 1) {                  \
     return tmp_val;                                                          \
   }                                                                          \
-  item_ct1.barrier(sycl::access::fence_space::local_space);                  \
+  sycl::group_barrier(group);                                                \
   if (item_ct1.get_sub_group().leader()) {                                   \
     tmp[subgroup_id] = tmp_val;                                              \
   }                                                                          \
-  item_ct1.barrier(sycl::access::fence_space::local_space);                  \
+  sycl::group_barrier(group);                                                \
   if (subgroup_id == 0) {                                                    \
     tmp_val = tmp[item_ct1.get_local_id(2)];                                 \
     tmp_val = cinn_warp_shuffle_internal(tmp_val, item_ct1);                 \
@@ -1392,7 +1388,7 @@ performance if there is no access to global memory.
       tmp[0] = tmp_val;                                                      \
     }                                                                        \
   }                                                                          \
-  item_ct1.barrier(sycl::access::fence_space::local_space);                  \
+  sycl::group_barrier(group);                                                \
   return tmp[0];
 
 #define CINN_BLOCK_REDUCE_INTERNAL_MACRO(REDUCE_TYPE, INITIAL_VALUE, DTYPE) \

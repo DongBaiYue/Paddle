@@ -101,11 +101,19 @@ void SYCLBackendAPI::set_device(int device_id) {
         }
       }
     };
+    ::sycl::property_list c_prop{};
+    if (arch == Target::Arch::CambriconMLU) {
+      c_prop = {
+        ::sycl::property::context::cuda::use_primary_context(),
+        // ::sycl::property::context::cnrt::disable_event_record()
+      };
+    }
     ::sycl::property_list q_prop{
+        ::sycl::property::queue::cuda::use_default_stream(),
         ::sycl::property::queue::in_order()};  // In order queue
     // create context and queue
-    this->contexts[device_id] =
-        new ::sycl::context(this->devices[device_id], exception_handler);
+    this->contexts[device_id] = new ::sycl::context(
+        this->devices[device_id], exception_handler, c_prop);
     // one device one queue
     this->queues[device_id].push_back(new ::sycl::queue(
         *this->contexts[device_id], this->devices[device_id], q_prop));
@@ -194,7 +202,7 @@ void SYCLBackendAPI::free(void* data) {
 void SYCLBackendAPI::memset(void* data, int value, size_t numBytes) {
   VLOG(3) << "sycl memset";
   SYCL_CALL(
-      this->queues[now_device_id][0]->memset(data, value, numBytes).wait());
+      this->queues[now_device_id][0]->memset(data, value, numBytes));
 }
 
 void SYCLBackendAPI::memcpy(void* dest,
@@ -217,7 +225,7 @@ void SYCLBackendAPI::memcpy(void* dest,
       Q = this->queues[now_device_id][0];
       break;
   }
-  SYCL_CALL(Q->memcpy(dest, src, numBytes).wait());
+  SYCL_CALL(Q->memcpy(dest, src, numBytes));
 }
 
 void SYCLBackendAPI::device_sync() {

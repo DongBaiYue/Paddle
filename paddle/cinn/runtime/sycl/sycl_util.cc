@@ -87,7 +87,6 @@ void cinn_call_sycl_kernel(void* kernel_fn,
     ::sycl::range<3> Grid(grid_z, grid_y, grid_x);
     ::sycl::range<3> Block(block_z, block_y, block_x);
     kernel_func(*Queue, Grid, Block, kernel_args.data());
-    Queue->wait_and_throw();
   }
 }
 
@@ -661,7 +660,6 @@ void cinn_call_onednn_matmul(void *v_args,
   }
 
   matmul_prim.execute(stream, matmul_args);
-  stream.wait();
 }
 
 void cinn_call_onednn_conv2d_forward(void *v_args,
@@ -786,7 +784,6 @@ void cinn_call_onednn_conv2d_forward(void *v_args,
   if (conv_pd.dst_desc() != user_dst_mem.get_desc()) {
     reorder(dst_mem, user_dst_mem).execute(stream, dst_mem, user_dst_mem);
   }
-  stream.wait();
 }
 
 void cinn_call_onednn_conv2d_backward_data(void *v_args,
@@ -895,7 +892,6 @@ void cinn_call_onednn_conv2d_backward_data(void *v_args,
   if (conv_bwd_data_pd.diff_src_desc() != user_diff_src_mem.get_desc()) {
     reorder(diff_src_mem, user_diff_src_mem).execute(stream, diff_src_mem, user_diff_src_mem);
   }
-  stream.wait();
 }
 
 void cinn_call_onednn_conv2d_backward_filter(void *v_args,
@@ -1004,7 +1000,6 @@ void cinn_call_onednn_conv2d_backward_filter(void *v_args,
   if (conv_bwd_weights_pd.diff_weights_desc() != user_diff_weights_mem.get_desc()) {
     reorder(diff_weights_mem, user_diff_weights_mem).execute(stream, diff_weights_mem, user_diff_weights_mem);
   }
-  stream.wait();
 }
 
 void cinn_call_onednn_pool2d_forward(void *v_args,
@@ -1082,7 +1077,6 @@ void cinn_call_onednn_pool2d_forward(void *v_args,
   pooling_args.insert({DNNL_ARG_DST, dst_mem});
 
   pooling.execute(stream, pooling_args);
-  stream.wait();
 }
 
 void cinn_call_onednn_pool2d_backward(void *v_args,
@@ -1174,7 +1168,6 @@ void cinn_call_onednn_pool2d_backward(void *v_args,
   pooling_bwd_args.insert({DNNL_ARG_WORKSPACE, workspace_mem});
 
   pooling_bwd.execute(stream, pooling_bwd_args);
-  stream.wait();
 }
 
 #endif // CINN_WITH_DNNL

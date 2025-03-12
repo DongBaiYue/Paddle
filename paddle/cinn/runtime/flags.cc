@@ -38,6 +38,7 @@ using ::paddle::flags::BoolFromEnv;
 using ::paddle::flags::DoubleFromEnv;
 using ::paddle::flags::Int32FromEnv;
 using ::paddle::flags::Int64FromEnv;
+using ::paddle::flags::Uint64FromEnv;
 using ::paddle::flags::StringFromEnv;
 
 PD_DEFINE_string(cinn_x86_builtin_code_root,
@@ -131,6 +132,10 @@ PD_DEFINE_string(cinn_check_fusion_accuracy_pass,
 PD_DEFINE_bool(cinn_use_cuda_vectorize,
                BoolFromEnv("FLAGS_cinn_use_cuda_vectorize", false),
                "Whether use cuda vectorize on schedule config");
+
+PD_DEFINE_uint64(cinn_max_vector_width,
+                 Uint64FromEnv("FLAGS_cinn_max_vector_width", 32768),
+                 "Max vector width for cinn vectorize");
 
 PD_DEFINE_bool(use_reduce_split_pass,
                BoolFromEnv("FLAGS_use_reduce_split_pass", false),

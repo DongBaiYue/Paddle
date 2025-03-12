@@ -81,7 +81,7 @@ class OpTransInfo {
 
   std::unordered_set<std::string> default_deny_ops_{
       "feed", "fetch", "conv2d", "conv2d_grad", "depthwise_conv2d", "depthwise_conv2d_grad",
-      "pool2d", "pool2d_grad"};
+      "pool2d", "pool2d_grad", "matmul_v2", "matmul_v2_grad"};
 };
 
 // A pass named BuildCinnPass, the function of this pass is:

@@ -26,6 +26,7 @@
 
 PD_DECLARE_bool(cinn_use_cuda_vectorize);
 PD_DECLARE_bool(cinn_new_group_scheduler);
+PD_DECLARE_uint64(cinn_max_vector_width);
 
 namespace cinn {
 namespace hlir {
@@ -693,7 +694,7 @@ ir::Expr OpLowererImpl::DoGroupSchedule(
               << ir_sch.GetModule().GetExprs().at(0);
       auto loop_inner = loops.back();
       auto psize = ir::GetLoopExtent(loop_inner);
-      int vector_width = 32768;
+      uint64_t vector_width = FLAGS_cinn_max_vector_width;
       if (vector_width >= psize)
         vector_width = psize;
       else {

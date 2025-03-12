@@ -105,7 +105,7 @@ void SYCLBackendAPI::set_device(int device_id) {
     if (arch == Target::Arch::CambriconMLU) {
       c_prop = {
         ::sycl::property::context::cuda::use_primary_context(),
-        // ::sycl::property::context::cnrt::disable_event_record()
+        ::sycl::property::context::cnrt::disable_event_record()
       };
     }
     ::sycl::property_list q_prop{

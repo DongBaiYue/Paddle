@@ -134,11 +134,11 @@ void ProgramInterpreter::RunImpl() {
     ExecuteInstructionList(vec_instruction_);
   }
 
-#ifdef PADDLE_WITH_CUSTOM_DEVICE
-  if (platform::is_custom_place(place_)) {
-    platform::DeviceContextPool::Instance().Get(place_)->Wait();
-  }
-#endif
+// #ifdef PADDLE_WITH_CUSTOM_DEVICE
+//   if (platform::is_custom_place(place_)) {
+//     platform::DeviceContextPool::Instance().Get(place_)->Wait();
+//   }
+// #endif
 }
 
 FetchList ProgramInterpreter::Run(const std::vector<std::string>& feed_names,

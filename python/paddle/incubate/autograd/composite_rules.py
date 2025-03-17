@@ -97,13 +97,11 @@ def composite_batchnorm(
         1 if i in reduce_axes else s for i, s in enumerate(x.shape)
     )
 
-    half = full([1], -0.5, x.dtype)
-
     if not use_run_stat:
         batch_mean = mean(x, reduce_axes)
         temp = mean(x * x, reduce_axes)
         batch_var = temp - batch_mean * batch_mean
-        inv_std = pow((batch_var + epsilon), half)
+        inv_std = rsqrt(batch_var + epsilon)
         if data_layout == "NHWC":
             x_hat = (x - batch_mean) * inv_std
         else:
@@ -113,15 +111,14 @@ def composite_batchnorm(
 
         run_mean = momentum * run_mean + (1 - momentum) * batch_mean
         run_var = momentum * run_var + (1 - momentum) * batch_var
+        batch_mean_ = assign(batch_mean)
+        inv_std_ = assign(inv_std)
     else:
-        batch_mean = zeros(run_mean.shape, run_mean.dtype)
-        batch_var = zeros(run_var.shape, run_var.dtype)
-        inv_std = pow((batch_var + epsilon), half)
         if data_layout == "NHWC":
-            x_hat = (x - run_mean) * pow((run_var + epsilon), half)
+            x_hat = (x - run_mean) * rsqrt(run_var + epsilon)
         else:
-            x_hat = (x - reshape(run_mean, stats_shape)) * pow(
-                (reshape(run_var, stats_shape) + epsilon), half
+            x_hat = (x - reshape(run_mean, stats_shape)) * rsqrt(
+                reshape(run_var, stats_shape) + epsilon
             )
     if data_layout == "NHWC":
         y = scale * x_hat + bias
@@ -131,8 +128,6 @@ def composite_batchnorm(
         y = cast(y, dtype)
 
     # add op assign to detach tensor in void unsafe change outside the rule.
-    batch_mean_ = assign(batch_mean)
-    inv_std_ = assign(inv_std)
     run_mean_ = assign(run_mean)
     run_var_ = assign(run_var)
 

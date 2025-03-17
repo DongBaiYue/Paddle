@@ -51,6 +51,9 @@ CreateInterpreterCoreGarbageCollector(
   } else if (platform::is_ipu_place(place)) {
     return std::unique_ptr<InterpreterCoreGarbageCollector>(
         new InterpreterCoreNoEventGarbageCollector());
+  } else if (platform::is_custom_place(place)) {
+    return std::unique_ptr<InterpreterCoreGarbageCollector>(
+      new InterpreterCoreFastGarbageCollector());
   } else {
     return std::unique_ptr<InterpreterCoreGarbageCollector>(
         new InterpreterCoreEventGarbageCollector(vec_instruction));
@@ -81,6 +84,9 @@ CreateInterpreterCoreGarbageCollector(
   } else if (platform::is_ipu_place(place)) {
     return std::unique_ptr<InterpreterCoreGarbageCollector>(
         new InterpreterCoreNoEventGarbageCollector());
+  } else if (platform::is_custom_place(place)) {
+    return std::unique_ptr<InterpreterCoreGarbageCollector>(
+      new InterpreterCoreFastGarbageCollector());
   } else {
     return std::unique_ptr<InterpreterCoreGarbageCollector>(
         new InterpreterCoreEventGarbageCollector(vec_instruction));

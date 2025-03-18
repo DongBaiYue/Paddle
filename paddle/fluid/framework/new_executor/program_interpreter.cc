@@ -164,7 +164,7 @@ FetchList ProgramInterpreter::Run(const std::vector<std::string>& feed_names,
     is_build_ = true;
     is_shared_results_build_ = true;
   } else {
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP) || defined(PADDLE_WITH_CUSTOM_DEVICE)
     if (switch_stream) {
       Convert(&op_func_nodes);
     }
@@ -713,6 +713,8 @@ void ProgramInterpreter::Convert(
 
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
     vec_instruction_.back().UpdateRecordStreamForGcInfo();
+#elif defined(PADDLE_WITH_CUSTOM_DEVICE)  
+    vec_instruction_.back().UpdateRecordStreamForGcInfo();  
 #endif
   }
 
@@ -1372,12 +1374,16 @@ void ProgramInterpreter::RunInstructionAsync(size_t instr_id) {
 }
 
 void ProgramInterpreter::RecordStreamForGC(const Instruction& instr) {
-#if !defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP)
+#if !defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP) && !defined(PADDLE_WITH_CUSTOM_DEVICE)
   PADDLE_THROW(platform::errors::Unimplemented(
-      "RecordStreamForGC is only implemented when compiled with GPU."));
+      "RecordStreamForGC is only implemented when compiled with GPU or MLU."));
 #else
   platform::RecordEvent record(
-      "RecordStreamForGC", platform::TracerEventType::UserDefined, 10);
+      "RecordStreamForGC", platform::TracerEventType::UserDefined, 10);  
+#endif      
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+  // platform::RecordEvent record(
+      // "RecordStreamForGC", platform::TracerEventType::UserDefined, 10);
 
   auto TensorRecordStream = [](phi::DenseTensor& tensor,
                                const gpuStream_t& stream) {
@@ -1402,6 +1408,25 @@ void ProgramInterpreter::RecordStreamForGC(const Instruction& instr) {
       // nothing here
     }
   };
+
+#elif defined(PADDLE_WITH_CUSTOM_DEVICE)
+  auto TensorRecordStream = [](phi::DenseTensor& tensor,
+                               const phi::stream::stream_t& stream) {
+    auto allocation = tensor.Holder();
+    if (allocation == nullptr) {
+      return;
+    }
+
+    const platform::Place& place = allocation->place();
+    if (platform::is_custom_place(place)) {
+      memory::RecordStream(allocation, stream);
+    } else {
+      // memory copies involve CPUPlace are always synchronous, so just do
+      // nothing here
+    }
+  };
+  VLOG(4) <<"RecordStreamForGC Paddle_with_custom_device";
+#endif
 
   /* NOTE(Ruibiao)：Cross-stream tensor synchronization is required only when
    * all the following conditions are satisfied:
@@ -1474,13 +1499,13 @@ void ProgramInterpreter::RecordStreamForGC(const Instruction& instr) {
           framework::ToTypeName(var->Type())));
     }
   }
-#endif
+// #endif
 }
 
 void ProgramInterpreter::CheckGC(const Instruction& instr) {
   platform::RecordEvent record(
       "CheckGC", platform::TracerEventType::UserDefined, 10);
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP) || defined(PADDLE_WITH_CUSTOM_DEVICE)
   if (instr.need_record_stream_for_gc_) {
     RecordStreamForGC(instr);
   }

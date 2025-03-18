@@ -345,6 +345,17 @@ void Instruction::UpdateRecordStreamForGcInfo() {
   }
 #endif
 }
+#elif defined(PADDLE_WITH_CUSTOM_DEVICE)
+void Instruction::UpdateRecordStreamForGcInfo() {
+  if (!IsInterpretercoreFastGCEnabled() ||
+      KernelType() != OpFuncType::kGpuAsync) {
+    return;
+  }
+  VLOG(4)<<"UpdateRecordStreamForGcInfo Paddle_with_custom_device need_record_stream_for_gc is true";
+  need_record_stream_for_gc_ = true;
+
+  stream_ = reinterpret_cast<const phi::CustomContext&>(DeviceContext()).stream();
+}
 #endif
 
 }  // namespace framework

@@ -314,6 +314,10 @@ class Instruction {
   bool need_record_stream_for_gc_ = false;
   gpuStream_t stream_{nullptr};
   void UpdateRecordStreamForGcInfo();
+#elif defined(PADDLE_WITH_CUSTOM_DEVICE)
+  bool need_record_stream_for_gc_ = false;
+  phi::stream::stream_t stream_{nullptr};
+  void UpdateRecordStreamForGcInfo();
 #endif
 
   bool can_use_infermeta_ctx_ = false;

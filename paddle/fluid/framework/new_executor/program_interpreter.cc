@@ -164,7 +164,7 @@ FetchList ProgramInterpreter::Run(const std::vector<std::string>& feed_names,
     is_build_ = true;
     is_shared_results_build_ = true;
   } else {
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP) || defined(PADDLE_WITH_CUSTOM_DEVICE)
     if (switch_stream) {
       Convert(&op_func_nodes);
     }
@@ -711,7 +711,7 @@ void ProgramInterpreter::Convert(
 #endif
     vec_instruction_.emplace_back(op_idx, std::move(op_func_node), *dev_ctx_);
 
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP) || defined(PADDLE_WITH_CUSTOM_DEVICE)
     vec_instruction_.back().UpdateRecordStreamForGcInfo();
 #endif
   }
@@ -1372,21 +1372,22 @@ void ProgramInterpreter::RunInstructionAsync(size_t instr_id) {
 }
 
 void ProgramInterpreter::RecordStreamForGC(const Instruction& instr) {
-#if !defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP)
+#if !defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP) && !defined(PADDLE_WITH_CUSTOM_DEVICE)
   PADDLE_THROW(platform::errors::Unimplemented(
-      "RecordStreamForGC is only implemented when compiled with GPU."));
+      "RecordStreamForGC is only implemented when compiled with GPU or other Devices."));
 #else
   platform::RecordEvent record(
       "RecordStreamForGC", platform::TracerEventType::UserDefined, 10);
 
   auto TensorRecordStream = [](phi::DenseTensor& tensor,
-                               const gpuStream_t& stream) {
+                               const auto& stream) {
     auto allocation = tensor.Holder();
     if (allocation == nullptr) {
       return;
     }
 
     const platform::Place& place = allocation->place();
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
     if (platform::is_gpu_place(place)) {
       memory::RecordStream(allocation, stream);
     } else if (platform::is_cuda_pinned_place(place)) {
@@ -1397,6 +1398,10 @@ void ProgramInterpreter::RecordStreamForGC(const Instruction& instr) {
       // present, we just log a WARNING here. A better design is required.
       LOG(WARNING) << "Copy data from a CUDAPinned tensor in an asynchronous "
                       "manner may lead a data inconsistent";
+#elif defined(PADDLE_WITH_CUSTOM_DEVICE)
+    if (platform::is_custom_place(place)) {
+      memory::RecordStream(allocation, stream);
+#endif
     } else {
       // memory copies involve CPUPlace are always synchronous, so just do
       // nothing here
@@ -1480,7 +1485,7 @@ void ProgramInterpreter::RecordStreamForGC(const Instruction& instr) {
 void ProgramInterpreter::CheckGC(const Instruction& instr) {
   platform::RecordEvent record(
       "CheckGC", platform::TracerEventType::UserDefined, 10);
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP) || defined(PADDLE_WITH_CUSTOM_DEVICE)
   if (instr.need_record_stream_for_gc_) {
     RecordStreamForGC(instr);
   }

@@ -310,10 +310,12 @@ class Instruction {
   const OpFuncNode* OpFunc() const { return &op_func_node_; }
 
   // record stream for gc
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
   bool need_record_stream_for_gc_ = false;
-  gpuStream_t stream_{nullptr};
   void UpdateRecordStreamForGcInfo();
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+  gpuStream_t stream_{nullptr};
+#elif defined(PADDLE_WITH_CUSTOM_DEVICE)
+  phi::stream::stream_t stream_{nullptr};
 #endif
 
   bool can_use_infermeta_ctx_ = false;

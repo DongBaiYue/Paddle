@@ -312,8 +312,8 @@ void Instruction::AddInplace(Variable* in, Variable* out) {
 
 void Instruction::ClearInplace() { vec_inplace_in_to_out_.clear(); }
 
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 void Instruction::UpdateRecordStreamForGcInfo() {
+#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
   if (!IsInterpretercoreFastGCEnabled() ||
       KernelType() != OpFuncType::kGpuAsync) {
     return;
@@ -343,9 +343,16 @@ void Instruction::UpdateRecordStreamForGcInfo() {
                     ->stream();
     }
   }
+#endif // defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL)
+#elif defined(PADDLE_WITH_CUSTOM_DEVICE)
+  if (KernelType() != OpFuncType::kGpuAsync) {
+    return;
+  }
+  need_record_stream_for_gc_ = true;
+
+  stream_ = reinterpret_cast<const phi::CustomContext&>(DeviceContext()).stream();
 #endif
 }
-#endif
 
 }  // namespace framework
 }  // namespace paddle

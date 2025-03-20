@@ -494,27 +494,6 @@ std::vector<Expr> CasSimplifyMutator::SimplifyBinaryProduct(Expr left,
     if (bi && bi->value == 1) return {a};
     if (bf && bf->value == 1.f) return {a};
 
-    {
-      auto* a_sum = a.As<Sum>();
-      auto* b_sum = b.As<Sum>();
-
-      if (b_sum) {
-        std::vector<Expr> args;
-        for (auto& v : b_sum->operands()) {
-          args.push_back(CasSimplify(Product::Make({a, v}), var_intervals));
-        }
-        return {SimplifySum(Sum::Make(args))};
-      }
-
-      if (a_sum) {
-        std::vector<Expr> args;
-        for (auto& v : a_sum->operands()) {
-          args.push_back(CasSimplify(Product::Make({b, v}), var_intervals));
-        }
-        return {SimplifySum(Sum::Make(args))};
-      }
-    }
-
     // case 4, b <| a
     {
       if (ExprPosCmp()(b, a)) {
@@ -1904,7 +1883,7 @@ Expr ConvertCasToCinn(Expr expr) {
       Visit(expr);
     }
 
-    // a + -1*b -> a-b
+    // a + -b -> a-b
     void Visit(const Add* op, Expr* expr) override {
       auto a = op->a();
       auto b = op->b();
@@ -1912,11 +1891,42 @@ Expr ConvertCasToCinn(Expr expr) {
       Visit(&a);
       Visit(&b);
 
-      auto* bp = b.As<ir::Mul>();
-      if (bp && bp->a().is_constant() && bp->a().get_constant() == -1.f) {
-        *expr = Sub::Make(a, bp->b());
+      auto *a_minus = a.As<ir::Minus>();
+      auto *b_minus = b.As<ir::Minus>();
+      if (a_minus) {
+        *expr = Sub::Make(b, a_minus->v());
+      } else if (b_minus) {
+        *expr = Sub::Make(a, b_minus->v());
       } else {
         *expr = Add::Make(a, b);
+      }
+    }
+
+    // -1 * a -> -a
+    void Visit(const Mul* op, Expr* expr) override {
+      auto a = op->a();
+      auto b = op->b();
+
+      Visit(&a);
+      Visit(&b);
+
+      auto a_value = a.As<ir::Broadcast>() ? a.As<ir::Broadcast>()->value : a;
+      auto b_value = b.As<ir::Broadcast>() ? b.As<ir::Broadcast>()->value : b;
+      auto* ai = a_value.As<ir::IntImm>();
+      auto* bi = b_value.As<ir::IntImm>();
+      auto* af = a_value.As<ir::FloatImm>();
+      auto* bf = b_value.As<ir::FloatImm>();
+
+      if (ai && ai->value == -1) {
+        *expr = Minus::Make(b);
+      } else if (af && af->value == -1.f) {
+        *expr = Minus::Make(b);
+      } else if (bi && bi->value == -1) {
+        *expr = Minus::Make(a);
+      } else if (bf && bf->value == -1.f) {
+        *expr = Minus::Make(a);
+      } else {
+        *expr = Mul::Make(a, b);
       }
     }
   };

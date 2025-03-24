@@ -250,7 +250,7 @@ std::shared_ptr<framework::OpStrategy> StrategyForResize(
       if (target.arch_is_gpu()) {
         pe::IRCudaScheduleInjective(ir_sch, output_shapes.front(), target);
       } else if (target.arch_is_mlu()) {
-        pe::IRScheduleInjectiveMLU(ir_sch, output_shapes.front(), target);
+        pe::IRMLUScheduleInjective(ir_sch, output_shapes.front(), target);
       } else if (target.arch == Target::Arch::X86) {
         pe::IRScheduleInjectiveCPU(ir_sch, output_shapes.front(), target, true);
       }

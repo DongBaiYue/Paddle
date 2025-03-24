@@ -511,12 +511,6 @@ void CodeGenSYCL_Dev::Visit(const ir::Cast *op) {
   }
 }
 
-void CodeGenSYCL_Dev::Visit(const ir::For *op) {
-  str_ += "#pragma clang loop unroll(disable)\n";
-  DoIndent();
-  CodeGenC::Visit(op);
-}
-
 void CodeGenSYCL_Dev::PrintStackVecType(Type type, int lanes) {
   str_ += "DataVec<";
   str_ += GetTypeRepr(type);

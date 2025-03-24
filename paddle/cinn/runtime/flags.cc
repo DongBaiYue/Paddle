@@ -134,7 +134,7 @@ PD_DEFINE_bool(cinn_use_cuda_vectorize,
                "Whether use cuda vectorize on schedule config");
 
 PD_DEFINE_uint64(cinn_max_vector_width,
-                 Uint64FromEnv("FLAGS_cinn_max_vector_width", 32768),
+                 Uint64FromEnv("FLAGS_cinn_max_vector_width", 16384),
                  "Max vector width for cinn vectorize");
 
 PD_DEFINE_bool(use_reduce_split_pass,

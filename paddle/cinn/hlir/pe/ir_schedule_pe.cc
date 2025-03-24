@@ -84,18 +84,8 @@ void IRElementwiseSchedule(ir::IRSchedule &ir_sch,  // NOLINT
       ir_sch.Bind(splited[1], "threadIdx.x");
     }
   } else if (target.arch_is_mlu()) {
-    auto blocks = ir_sch.GetAllBlocks();
-    ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), true);
-    auto loop = ir_sch.GetLoops(blocks[0])[0];
-
-    auto size = std::accumulate(
-        output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
-    int num_cores = target.max_num_threads() * target.get_multi_processor_count();
-    if (size > num_cores) {
-      while (size % num_cores != 0) num_cores--;
-      auto splited = ir_sch.Split(loop, {num_cores, -1});
-      ir_sch.Bind(splited[0], "blockIdx.x");
-    }
+    // TODO: get broadcast info
+    IRMLUScheduleInjective(ir_sch, output_shape, target);
   } else {
     // IRScheduleInjectiveCPU(ir_sch, output_shape, target, false);
     auto blocks = ir_sch.GetAllBlocks();
@@ -125,18 +115,8 @@ void IRInjectiveSchedule(ir::IRSchedule &ir_sch,  // NOLINT
       ir_sch.Bind(splited[1], "threadIdx.x");
     }
   } else if (target.arch_is_mlu()) {
-    auto blocks = ir_sch.GetAllBlocks();
-    ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), false);
-    auto loop = ir_sch.GetLoops(blocks[0])[0];
-
-    auto size = std::accumulate(
-        output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
-    int num_cores = target.max_num_threads() * target.get_multi_processor_count();
-    if (size > num_cores) {
-      while (size % num_cores != 0) num_cores--;
-      auto splited = ir_sch.Split(loop, {num_cores, -1});
-      ir_sch.Bind(splited[0], "blockIdx.x");
-    }
+    // TODO: get broadcast info
+    IRMLUScheduleInjective(ir_sch, output_shape, target);
   } else {
     // IRScheduleInjectiveCPU(ir_sch, output_shape, target, false);
     auto blocks = ir_sch.GetAllBlocks();
@@ -183,13 +163,11 @@ void IRScheduleInjectiveCPU(ir::IRSchedule &ir_sch,  // NOLINT
           << ir_sch.GetModule().GetExprs().at(0);
 }
 
-void IRScheduleInjectiveMLU(ir::IRSchedule &ir_sch,  // NOLINT
-                            const std::vector<int> &output_shape,
-                            const cinn::common::Target &target) {
-  VLOG(3) << "Begin IRScheduleInjectiveMLU"
-          << ir_sch.GetModule().GetExprs().at(0);
+void IRMLUScheduleElementwise(ir::IRSchedule &ir_sch,  // NOLINT
+                              const std::vector<int> &output_shape,
+                              const cinn::common::Target &target) {
   auto blocks = ir_sch.GetAllBlocks();
-  ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), false);
+  ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), true);
   auto loop = ir_sch.GetLoops(blocks[0])[0];
 
   auto size = std::accumulate(
@@ -200,7 +178,32 @@ void IRScheduleInjectiveMLU(ir::IRSchedule &ir_sch,  // NOLINT
     auto splited = ir_sch.Split(loop, {num_cores, -1});
     ir_sch.Bind(splited[0], "blockIdx.x");
   }
-  VLOG(3) << "After IRScheduleInjectiveMLU, new ir is : "
+}
+
+void IRMLUScheduleInjective(ir::IRSchedule &ir_sch,  // NOLINT
+                            const std::vector<int> &output_shape,
+                            const cinn::common::Target &target) {
+  VLOG(3) << "Begin IRMLUScheduleInjective"
+          << ir_sch.GetModule().GetExprs().at(0);
+  if (output_shape.size() == 4) {
+    // 4D tensor with NCHW layout
+    // TODO: get tensor layout
+    int block_num = output_shape[0] * output_shape[1];
+    int width = output_shape[2] * output_shape[3];
+
+    auto blocks = ir_sch.GetAllBlocks();
+    ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), true);
+    auto loop = ir_sch.GetLoops(blocks[0])[0];
+
+    int num_cores = target.max_num_threads() * target.get_multi_processor_count();
+    while (block_num % num_cores != 0) num_cores--;
+    auto splited = ir_sch.Split(loop, {num_cores, -1, width});
+    ir_sch.Bind(splited[0], "blockIdx.x");
+  } else {
+    IRMLUScheduleElementwise(ir_sch, output_shape, target);
+    return;
+  }
+  VLOG(3) << "After IRMLUScheduleInjective, new ir is : "
           << ir_sch.GetModule().GetExprs().at(0);
 }
 

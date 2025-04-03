@@ -185,9 +185,9 @@ void IRMLUScheduleInjective(ir::IRSchedule &ir_sch,  // NOLINT
                             const cinn::common::Target &target) {
   VLOG(3) << "Begin IRMLUScheduleInjective"
           << ir_sch.GetModule().GetExprs().at(0);
-  if (output_shape.size() == 4) {
+  // TODO: get tensor layout
+  if (output_shape.size() == 4 && output_shape[2] > 1 && output_shape[3] > 1) {
     // 4D tensor with NCHW layout
-    // TODO: get tensor layout
     int block_num = output_shape[0] * output_shape[1];
     int width = output_shape[2] * output_shape[3];
 
@@ -200,8 +200,38 @@ void IRMLUScheduleInjective(ir::IRSchedule &ir_sch,  // NOLINT
     auto splited = ir_sch.Split(loop, {num_cores, -1, width});
     ir_sch.Bind(splited[0], "blockIdx.x");
   } else {
-    IRMLUScheduleElementwise(ir_sch, output_shape, target);
-    return;
+    if (output_shape.size() == 1) {
+      IRMLUScheduleElementwise(ir_sch, output_shape, target);
+      return;
+    }
+    auto size = std::accumulate(
+        output_shape.begin(), output_shape.end(), 1, std::multiplies<int>());
+    if (size == 1) {
+      IRMLUScheduleElementwise(ir_sch, output_shape, target);
+      return;
+    }
+
+    int width = 1;
+    for (int i = output_shape.size() - 1; i >= 0; --i) {
+      if (output_shape[i] > 1) {
+        width *= output_shape[i];
+        break;
+      }
+    }
+    if (width == size) {
+      IRMLUScheduleElementwise(ir_sch, output_shape, target);
+      return;
+    }
+    int block_num = size / width;
+
+    auto blocks = ir_sch.GetAllBlocks();
+    ir_sch.FlattenLoops(ir_sch.GetLoops(blocks[0]), true);
+    auto loop = ir_sch.GetLoops(blocks[0])[0];
+
+    int num_cores = target.max_num_threads() * target.get_multi_processor_count();
+    while (block_num % num_cores != 0) num_cores--;
+    auto splited = ir_sch.Split(loop, {num_cores, -1, width});
+    ir_sch.Bind(splited[0], "blockIdx.x");
   }
   VLOG(3) << "After IRMLUScheduleInjective, new ir is : "
           << ir_sch.GetModule().GetExprs().at(0);

@@ -411,11 +411,14 @@ def dropout_composite(x, seed_tensor, p, is_test, mode, seed, fix_seed):
     seed = seed if fix_seed else 0
     upscale_in_train = mode == "upscale_in_train"
 
-    mask = bernoulli(shape=x.shape, dtype=x.dtype, p=p, seed=seed)
-
-    if upscale_in_train:
-        if not is_test:
-            # Process p=1.0 for avoid divide zero error (x*mask/(1.0-p))
+    if is_test:
+        if upscale_in_train:
+            return assign(x), None
+        else:
+            return x * (1.0 - p), None
+    else:
+        mask = bernoulli(shape=x.shape, dtype=x.dtype, p=p, seed=seed)
+        if upscale_in_train:
             if p == 1.0:
                 return 0.0 * x, zeros(x.shape, core.VarDesc.VarType.UINT8)
             else:
@@ -423,13 +426,7 @@ def dropout_composite(x, seed_tensor, p, is_test, mode, seed, fix_seed):
                     mask, core.VarDesc.VarType.UINT8
                 )
         else:
-            return assign(x), cast(mask, core.VarDesc.VarType.UINT8)
-    else:
-        if not is_test:
             return x * mask, cast(mask, core.VarDesc.VarType.UINT8)
-        else:
-            return x * (1.0 - p), cast(mask, core.VarDesc.VarType.UINT8)
-
 
 def bernoulli(shape, dtype, p, seed=0):
     from paddle.base.data_feeder import convert_dtype

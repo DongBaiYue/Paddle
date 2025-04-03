@@ -499,11 +499,20 @@ def _get_batch_norm_none_var(op):
         return ["ReserveSpace"]
 
 
+def _get_dropout_none_var(op):
+    """Some outputs of dropout's replaced composite rule are not needed and will be removed."""
+    if op.attr("is_test"):
+        return ["Mask"]
+    else:
+        return []
+
+
 # In some case, inputs and outputs of composite op or its replaced composite rule might be None.
 # It means such arg will be no longer required in processed program by composite mechanism.
 # Therefore, such special ops should be recorded in advance and be released in args check.
 ops_contain_none = {
     "batch_norm": _get_batch_norm_none_var,
+    "dropout": _get_dropout_none_var,
     "flatten_contiguous_range": ["XShape"],
     "squeeze2": ["XShape"],
     "unsqueeze2": ["XShape"],

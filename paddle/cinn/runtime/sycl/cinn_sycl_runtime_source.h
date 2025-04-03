@@ -138,32 +138,37 @@ struct DataVec {
     return res;
   }
 
-  static void _load(value_type* dst, const value_type* src, int start, int n, int denom) {
+  // cncc fails to compile without `inline`
+  inline static void _load(value_type* dst, const value_type* src, int start, int n, int denom) {
     // dest[0:n] = src[(start:start+n)/denom]
-    int remain = denom - start % denom;
-    for (int dst_idx = 0, src_idx = start / denom; dst_idx < n; src_idx++) {
-      int dst_size = (dst_idx == 0)? remain: denom;
-      dst_size = (dst_idx + dst_size > n)? n - dst_idx: dst_size;
-      sycl::ext::mlu::memset_nram(dst + dst_idx, src[src_idx], dst_size);
-      dst_idx += dst_size;
+    if (denom == 1) {
+      sycl::ext::mlu::memcpy_gdram2nram(dst, src + start, n);
+    } else {
+      int remain = denom - start % denom;
+      for (int dst_idx = 0, src_idx = start / denom; dst_idx < n; src_idx++) {
+        int dst_size = (dst_idx == 0)? remain: denom;
+        dst_size = (dst_idx + dst_size > n)? n - dst_idx: dst_size;
+        sycl::ext::mlu::memset_nram(dst + dst_idx, src[src_idx], dst_size);
+        dst_idx += dst_size;
+      }
     }
   }
 
-  static self_type Load(const value_type* addr, const IndexVec<Num>& offset) {
+  inline static self_type Load(const value_type* addr, const IndexVec<Num>& offset) {
     self_type res;
     int base = offset.base;
     sycl::ext::mlu::memcpy_gdram2nram(res.data_, addr + base, Num);
     return res;
   }
 
-  static self_type Load(const value_type* addr, const IndexVecWithDenom<Num>& offset) {
+  inline static self_type Load(const value_type* addr, const IndexVecWithDenom<Num>& offset) {
     self_type res;
     int base = offset.base, denom = offset.denominator;
     _load(res.data_, addr, base, Num, denom);
     return res;
   }
 
-  static self_type Load(const value_type* addr, const IndexVecWithMod<Num>& offset) {
+  inline static self_type Load(const value_type* addr, const IndexVecWithMod<Num>& offset) {
     // dst[0:n] = src[((base:base+n) % mod) / denom]
     self_type res;
     int base = offset.base, denom = offset.denominator, mod = offset.mod;

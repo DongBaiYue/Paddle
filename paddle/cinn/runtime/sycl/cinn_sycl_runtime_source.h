@@ -392,6 +392,67 @@ struct DataVec {
   DEF_CMP_OP(<=, le)
 #undef DEF_CMP_OP
 
+// 位运算符（& | ^）的实现
+#define DEF_BIT_OP(op, func)                                                   \
+  self_type operator op(const self_type& other) const {                         \
+    self_type res;                                                              \
+    sycl::ext::mlu::vector_##func(res.data_, data_, other.data_, Num);          \
+    return res;                                                                 \
+  }                                                                             \
+  self_type operator op(value_type val) const {                                 \
+    self_type res;                                                              \
+    sycl::ext::mlu::vector_##func(res.data_, data_, val, Num);                  \
+    return res;                                                                 \
+  }                                                                             \
+  friend self_type operator op(value_type val, const self_type& vec) {          \
+    self_type res;                                                              \
+    sycl::ext::mlu::vector_##func(res.data_, vec.data_, val, Num);              \
+    return res;                                                                 \
+  }
+
+DEF_BIT_OP(&, and)
+DEF_BIT_OP(|, or)
+DEF_BIT_OP(^, xor)
+#undef DEF_BIT_OP
+
+// 逻辑运算符（&& ||）的实现
+#define DEF_LOGIC_OP(op, func)                                                  \
+template <typename U = T>                                                       \
+  typename std::enable_if<std::is_same<U, bool>::value, DataVec<bool, Num>>::type                          \
+  operator op(const self_type& other) const {                                   \
+    self_type res;                                                              \
+    auto* self_ptr = reinterpret_cast<unsigned char*>(data_);                   \
+    auto* other_ptr = reinterpret_cast<unsigned char*>(other.data_);            \
+    auto* res_ptr = reinterpret_cast<unsigned char*>(res.data_);                \
+    sycl::ext::mlu::vector_##func(res_ptr, self_ptr, other_ptr, Num);           \
+    return res;                                                                 \
+  }                                                                             \
+template <typename U = T>                                                       \
+  typename std::enable_if<std::is_same<U, bool>::value, DataVec<bool, Num>>::type                          \
+  operator op(value_type val) const {                                           \
+    self_type res;                                                              \
+    auto* self_ptr = reinterpret_cast<unsigned char*>(data_);                   \
+    auto* res_ptr = reinterpret_cast<unsigned char*>(res.data_);                \
+    auto new_val = static_cast<unsigned char>(val);                                  \
+    sycl::ext::mlu::vector_##func(res_ptr, self_ptr, new_val, Num);             \
+    return res;                                                                 \
+  }                                                                             \
+template <typename U = T>                                                       \
+  friend typename std::enable_if<std::is_same<U, bool>::value, DataVec<bool, Num>>::type                          \
+  operator op(value_type val, const self_type& vec) {                           \
+    self_type res;                                                              \
+    auto* vec_ptr = reinterpret_cast<unsigned char*>(vec.data_);                \
+    auto* res_ptr = reinterpret_cast<unsigned char*>(res.data_);                \
+    auto new_val = static_cast<unsigned char>(val);                                  \
+    sycl::ext::mlu::vector_##func(res_ptr, vec_ptr, new_val, Num);              \
+    return res;                                                                 \
+  }
+
+DEF_LOGIC_OP(&&, and)
+DEF_LOGIC_OP(||, or)
+#undef DEF_LOGIC_OP
+
+
   value_type& operator[](size_t i) { return data_[i]; }
   value_type operator[](size_t i) const { return data_[i]; }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/cinn/runtime/sycl/sycl_backend_api.h"
+#include <cnrt.h>
 #include <glog/logging.h>
 
 namespace cinn {
@@ -79,18 +80,10 @@ Target::Arch SYCLBackendAPI::Init(Target::Arch arch) {
       std::cerr << "SYCL Not supported arch:" << arch;
   }
   initialized_ = true;
-  set_device(0);
   return this->arch;
 }
 
-void SYCLBackendAPI::set_device(int device_id) {
-  if (!initialized_) Init(Target::Arch::Unk);
-  if (device_id < 0) {
-    LOG(FATAL) << "set valid device id! device id:" << device_id;
-  } else if (device_id > this->devices.size() - 1) {
-    LOG(FATAL) << "set valid device id! device id:" << device_id
-               << " > max device id:" << this->devices.size() - 1;
-  }
+void SYCLBackendAPI::init_context_queue(int device_id){
   if (this->contexts[device_id] == nullptr) {
     auto exception_handler = [](::sycl::exception_list exceptions) {
       for (const std::exception_ptr& e : exceptions) {
@@ -118,10 +111,27 @@ void SYCLBackendAPI::set_device(int device_id) {
     this->queues[device_id].push_back(new ::sycl::queue(
         *this->contexts[device_id], this->devices[device_id], q_prop));
   }
+}
+
+void SYCLBackendAPI::set_device(int device_id) {
+  if (!initialized_) Init(Target::Arch::Unk);
+  if (device_id < 0) {
+    LOG(FATAL) << "set valid device id! device id:" << device_id;
+  } else if (device_id > this->devices.size() - 1) {
+    LOG(FATAL) << "set valid device id! device id:" << device_id
+               << " > max device id:" << this->devices.size() - 1;
+  }
+  init_context_queue(device_id);
   this->now_device_id = device_id;
 }
 
-int SYCLBackendAPI::get_device() { return this->now_device_id; }
+int SYCLBackendAPI::get_device() { 
+  int device_id = 0; 
+  cnrtGetDevice(&device_id);
+  this->now_device_id = device_id;
+  init_context_queue(device_id);
+  return device_id;
+}
 
 std::variant<int, std::array<int, 3>> SYCLBackendAPI::get_device_property(
     DeviceProperty device_property, std::optional<int> device_id) {

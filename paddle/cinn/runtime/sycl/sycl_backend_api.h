@@ -103,6 +103,7 @@ class SYCLBackendAPI final : public BackendAPI {
   void stream_sync(void* stream) final;
   ::sycl::queue* get_now_queue();
   std::string GetGpuVersion();
+  void init_context_queue(int device_id);
 
  private:
   Target::Arch arch;
@@ -112,8 +113,8 @@ class SYCLBackendAPI final : public BackendAPI {
   std::vector<::sycl::context*> contexts;
   // all queues in all devices
   std::vector<std::vector<::sycl::queue*>> queues;
-  // now_device_id, change by set_device()
-  int now_device_id = -1;
+  // now_device_id, change by  get_device()
+  int now_device_id = 0;
   // whether the BackendAPI is initialized.
   bool initialized_{false};
 };

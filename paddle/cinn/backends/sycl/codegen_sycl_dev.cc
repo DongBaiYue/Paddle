@@ -28,6 +28,8 @@
 #include "paddle/cinn/backends/sycl/compiler_sycl.h"
 using cinn::backends::syclrtc::NUM;
 
+PD_DECLARE_bool(cinn_use_cuda_vectorize);
+
 namespace cinn {
 namespace backends {
 
@@ -330,6 +332,9 @@ void CodeGenSYCL_Dev::PrintTempBufferCreation(const ir::Buffer &buffer) {
     }
 
     case ir::MemoryType::GPULocal: {
+      if (!FLAGS_cinn_use_cuda_vectorize) {
+        print_gpu_memory("");
+      }
       break;
     }
 
@@ -405,7 +410,11 @@ void CodeGenSYCL_Dev::Visit(const ir::Let *op) {
       ::common::errors::InvalidArgument(
           "ir::Let's op type cannot be valid in CodeGenSYCL_Dev"));
 
-  local_var_names_.insert(op->symbol.as_var()->name);
+  if (FLAGS_cinn_use_cuda_vectorize) {
+    local_var_names_.insert(op->symbol.as_var()->name);
+  } else {
+    CodeGenC::Visit(op);
+  }
 }
 
 void CodeGenSYCL_Dev::Visit(const ir::Load *op) {

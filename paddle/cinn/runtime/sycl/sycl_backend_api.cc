@@ -79,6 +79,8 @@ Target::Arch SYCLBackendAPI::Init(Target::Arch arch) {
     default:
       std::cerr << "SYCL Not supported arch:" << arch;
   }
+  int dev_id = get_device();
+  VLOG(4)<<"sycl backend device index is : "<<dev_id;
   initialized_ = true;
   return this->arch;
 }

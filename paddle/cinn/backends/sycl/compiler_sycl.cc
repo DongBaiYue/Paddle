@@ -15,8 +15,11 @@
 #include "paddle/cinn/backends/sycl/compiler_sycl.h"
 #include <sys/stat.h>  // for mkdir
 #include <fstream>
+#include <regex>
 #include "paddle/cinn/runtime/sycl/sycl_backend_api.h"
 using cinn::runtime::sycl::SYCLBackendAPI;
+
+PD_DECLARE_uint32(cinn_compile_level);
 
 namespace cinn {
 namespace backends {
@@ -71,6 +74,14 @@ std::string Compiler::CompileToSo(const std::string& source_code,
     command += " -I " + header;
   }
   SetDeviceArchOptions(gpu_type);
+  uint32_t compile_level = FLAGS_cinn_compile_level;
+  if(compile_level != 3){
+    // 使用正则表达式替换 -O[数字] 部分为新的优化等级
+    std::regex opt_level_regex("-O\\d");  // 匹配 -O 加一个数字，如 -O3
+    std::string new_opt_level = "-O" + std::to_string(compile_level);
+
+    cxx_compile_options = std::regex_replace(cxx_compile_options, opt_level_regex, new_opt_level);
+  }
   command += " " + device_arch_options + " " + cxx_compile_options + " " +
              source_file_path + " -o " + shared_lib_path;
   // compile

@@ -79,8 +79,6 @@ Target::Arch SYCLBackendAPI::Init(Target::Arch arch) {
     default:
       std::cerr << "SYCL Not supported arch:" << arch;
   }
-  int dev_id = get_device();
-  VLOG(4)<<"sycl backend device index is : "<<dev_id;
   initialized_ = true;
   return this->arch;
 }
@@ -196,6 +194,11 @@ std::variant<int, std::array<int, 3>> SYCLBackendAPI::get_device_property(
 }
 
 void* SYCLBackendAPI::malloc(size_t numBytes) {
+  if(now_device_id == -1){
+    VLOG(4)<<"sycl malloc set device";
+    int dev_id = get_device();
+    VLOG(4)<<"sycl backend device index is : "<<dev_id;
+  }  
   VLOG(3) << "sycl malloc";
   void* dev_mem = nullptr;
   SYCL_CALL(dev_mem = ::sycl::malloc_device(numBytes,

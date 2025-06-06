@@ -75,6 +75,7 @@ class CodeGenSYCL_Dev : public CodeGenC {
   void Visit(const ir::Broadcast *op) override;
   void Visit(const ir::Select *op) override;
   void Visit(const ir::Cast *op) override;
+  void Visit(const ir::For *op) override;
 
   void PrintStackVecType(Type type, int lanes);
 

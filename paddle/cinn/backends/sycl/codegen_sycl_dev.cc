@@ -520,6 +520,14 @@ void CodeGenSYCL_Dev::Visit(const ir::Cast *op) {
   }
 }
 
+void CodeGenSYCL_Dev::Visit(const ir::For *op) {
+  if (FLAGS_cinn_use_cuda_vectorize) {
+    str_ += "#pragma clang loop unroll(disable)\n";
+    DoIndent();
+  }
+  CodeGenC::Visit(op);
+}
+
 void CodeGenSYCL_Dev::PrintStackVecType(Type type, int lanes) {
   str_ += "DataVec<";
   str_ += GetTypeRepr(type);

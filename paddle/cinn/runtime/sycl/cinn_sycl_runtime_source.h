@@ -60,16 +60,30 @@ struct IndexVec {
   DataVec<float, Num> operator<(int val) const;
 };
 
-// (Ramp<Num>(base) % mod) / denom
+// (Ramp<Num>(base) % mod) / denom + offset
 template <size_t Num>
 struct IndexVecWithMod {
   using self_type = IndexVecWithMod<Num>;
   int base;
   int denominator;
   int mod;
+  int offset;
+
+  friend constexpr self_type operator+(const self_type &lhs, int val) {
+    self_type res{lhs.base, lhs.denominator, lhs.mod, lhs.offset + val};
+    return res;
+  }
+  friend constexpr self_type operator+(int val, const self_type &lhs) {
+    self_type res{lhs.base, lhs.denominator, lhs.mod, lhs.offset + val};
+    return res;
+  }
+  friend constexpr self_type operator-(const self_type &lhs, int val) {
+    self_type res{lhs.base, lhs.denominator, lhs.mod, lhs.offset - val};
+    return res;
+  }
 
   constexpr self_type operator/(int val) const {
-    self_type res{base, denominator * val, mod};
+    self_type res{base, denominator * val, mod, offset / val};
     return res;
   }
 
@@ -83,12 +97,16 @@ struct IndexVecWithDenom {
   int base;
   int denominator;
 
-  constexpr self_type operator+(int val) const {
-    self_type res{base + val * denominator, denominator};
+  friend constexpr self_type operator+(const self_type &lhs, int val) {
+    self_type res{lhs.base + val * lhs.denominator, lhs.denominator};
     return res;
   }
-  constexpr self_type operator-(int val) const {
-    self_type res{base - val * denominator, denominator};
+  friend constexpr self_type operator+(int val, const self_type &lhs) {
+    self_type res{lhs.base + val * lhs.denominator, lhs.denominator};
+    return res;
+  }
+  friend constexpr self_type operator-(const self_type &lhs, int val) {
+    self_type res{lhs.base - val * lhs.denominator, lhs.denominator};
     return res;
   }
   constexpr self_type operator/(int val) const {
@@ -101,7 +119,7 @@ struct IndexVecWithDenom {
 
 template <size_t Num>
 inline constexpr IndexVecWithMod<Num> IndexVec<Num>::operator%(int val) const {
-  IndexVecWithMod<Num> res{base, 1, val};
+  IndexVecWithMod<Num> res{base, 1, val, 0};
   return res;
 }
 template <size_t Num>
@@ -169,8 +187,9 @@ struct DataVec {
   }
 
   inline static self_type Load(const value_type* addr, const IndexVecWithMod<Num>& offset) {
-    // dst[0:n] = src[((base:base+n) % mod) / denom]
+    // dst[0:n] = src[((base:base+n) % mod) / denom + offset]
     self_type res;
+    addr += offset.offset;
     int base = offset.base, denom = offset.denominator, mod = offset.mod;
     for (int i = 0; i < Num; ) {
       int len = mod;
@@ -428,14 +447,14 @@ DataVec<float, Num> IndexVecWithDenom<Num>::operator<(int val) const {
 template <size_t Num>
 DataVec<float, Num> IndexVecWithMod<Num>::operator<(int val) const {
   DataVec<float, Num> res;
-  // dst[0:n] = ((base:base+n) % mod) / denominator < val
+  // dst[0:n] = ((base:base+n) % mod) / denominator < val - offset
   for (int i = 0; i < Num; ) {
     int len = mod;
     if (i == 0)
       len = (base / mod + 1) * mod - base;
     if (len + i > Num)
       len = Num - i;
-    _vector_le(res.data_ + i, (base + i) % mod, len, denominator, val);
+    _vector_le(res.data_ + i, (base + i) % mod, len, denominator, val - offset);
     i += len;
   }
   return res;

@@ -18,6 +18,8 @@
 #include "paddle/cinn/runtime/sycl/sycl_backend_api.h"
 using cinn::runtime::sycl::SYCLBackendAPI;
 
+PD_DECLARE_uint32(cinn_compile_level);
+
 namespace cinn {
 namespace backends {
 namespace syclrtc {
@@ -71,7 +73,10 @@ std::string Compiler::CompileToSo(const std::string& source_code,
     command += " -I " + header;
   }
   SetDeviceArchOptions(gpu_type);
-  command += " " + device_arch_options + " " + cxx_compile_options + " " +
+  uint32_t compile_level = FLAGS_cinn_compile_level;
+  std::string cxx_options = cxx_compile_options + " -O" +
+                            std::to_string(compile_level);
+  command += " " + device_arch_options + " " + cxx_options + " " +
              source_file_path + " -o " + shared_lib_path;
   // compile
   VLOG(2) << "compile command: " << command;

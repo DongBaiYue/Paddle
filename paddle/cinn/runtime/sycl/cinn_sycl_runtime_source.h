@@ -58,6 +58,7 @@ struct IndexVec {
   constexpr IndexVecWithDenom<Num> operator/(int val) const;
 
   DataVec<float, Num> operator<(int val) const;
+  DataVec<bool, Num> operator==(int val) const;
 };
 
 // (Ramp<Num>(base) % mod) / denom + offset
@@ -460,6 +461,16 @@ DataVec<float, Num> IndexVecWithMod<Num>::operator<(int val) const {
   return res;
 }
 
+template <size_t Num>
+DataVec<bool, Num> IndexVec<Num>::operator==(int val) const {
+  DataVec<bool, Num> res;
+  sycl::ext::mlu::memset_nram(res.data_, false, Num);
+  if (int i = val - base; i >= 0 && i < Num) {
+    res[i] = true;
+  }
+  return res;
+}
+
 // *************************************************************** //
 // memory load and store
 template <typename T1, typename T2>
@@ -476,6 +487,11 @@ template <typename T1, typename T2, size_t Num>
 inline void cinn_sycl_store(T1 *addr, const IndexVec<Num> &offset, const DataVec<T2, Num> &val) {
   static_assert(sizeof(T1) == sizeof(T2), "Data type mismatch");
   sycl::ext::mlu::memcpy_nram2gdram(addr + offset.base, (const T1 *)val.data_, Num);
+}
+
+template <typename T1, typename T2>
+inline T1 cinn_sycl_cast(T2 src) {
+  return static_cast<T1>(src);
 }
 
 template <typename T1, typename T2, size_t Num>

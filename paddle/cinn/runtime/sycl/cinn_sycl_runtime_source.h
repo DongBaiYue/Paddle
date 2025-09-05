@@ -501,8 +501,8 @@ inline DataVec<T1, Num> cinn_sycl_cast(const DataVec<T2, Num> &src) {
   return res;
 }
 
-template <typename T>
-inline T cinn_sycl_select(bool condition, T true_val, T false_val) {
+template <typename T1, typename T2>
+inline auto cinn_sycl_select(bool condition, T1 true_val, T2 false_val) {
   return condition ? true_val : false_val;
 }
 
